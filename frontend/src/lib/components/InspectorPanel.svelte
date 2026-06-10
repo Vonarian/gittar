@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { GetJobLogSnippet } from "../../../bindings/gittar/internal/service/appservice";
 
   interface Props {
@@ -26,6 +27,7 @@
 
   async function loadLogs() {
     if (jobId <= 0) return;
+    console.log("[InspectorPanel] loadLogs started for jobId:", jobId, "project:", projectPath);
     isLoading = true;
     errorMsg = "";
     logSnippet = "";
@@ -35,18 +37,23 @@
       if (!logSnippet) {
         logSnippet = "Job output trace was empty.";
       }
+      console.log("[InspectorPanel] loadLogs success, log size:", logSnippet.length);
     } catch (e: any) {
-      console.error(e);
+      console.error("[InspectorPanel] loadLogs failed:", e);
       errorMsg = e.message || "Failed to load job log trace.";
     } finally {
       isLoading = false;
+      console.log("[InspectorPanel] loadLogs complete, isLoading set to false");
     }
   }
 
   // Reactive log loading when job changes
   $effect(() => {
-    if (isOpen && jobId > 0) {
-      loadLogs();
+    console.log("[InspectorPanel] effect triggered:", { isOpen, jobId, projectPath });
+    if (isOpen && jobId > 0 && projectPath) {
+      untrack(() => {
+        loadLogs();
+      });
     }
   });
 </script>
