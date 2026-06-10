@@ -50,12 +50,12 @@
     window.removeEventListener("contextmenu", closeContextMenu);
   });
 
-  async function handleMerge(projectId: number, mrIID: number) {
-    if (processingMRs[mrIID]) return;
+  async function handleMerge(projectId: number, mrIID: number, mrId: number) {
+    if (processingMRs[mrId]) return;
     if (!confirm("Are you sure you want to merge this Merge Request?")) {
       return;
     }
-    processingMRs[mrIID] = "merging";
+    processingMRs[mrId] = "merging";
     try {
       await MergeMergeRequest(projectId, mrIID);
       if (onRefresh) onRefresh();
@@ -63,16 +63,16 @@
       console.error("Failed to merge MR:", e);
       alert("Failed to merge Merge Request: " + e.message);
     } finally {
-      processingMRs[mrIID] = null;
+      processingMRs[mrId] = null;
     }
   }
 
-  async function handleClose(projectId: number, mrIID: number) {
-    if (processingMRs[mrIID]) return;
+  async function handleClose(projectId: number, mrIID: number, mrId: number) {
+    if (processingMRs[mrId]) return;
     if (!confirm("Are you sure you want to close this Merge Request?")) {
       return;
     }
-    processingMRs[mrIID] = "closing";
+    processingMRs[mrId] = "closing";
     try {
       await CloseMergeRequest(projectId, mrIID);
       if (onRefresh) onRefresh();
@@ -80,7 +80,7 @@
       console.error("Failed to close MR:", e);
       alert("Failed to close Merge Request: " + e.message);
     } finally {
-      processingMRs[mrIID] = null;
+      processingMRs[mrId] = null;
     }
   }
 
@@ -528,11 +528,11 @@
               {#if mr.state === "opened"}
                 <div class="flex items-center space-x-1.5 pl-2">
                   <button
-                    onclick={(e) => { e.stopPropagation(); handleMerge(mr.project_id, mr.iid); }}
-                    disabled={!!processingMRs[mr.iid]}
+                    onclick={(e) => { e.stopPropagation(); handleMerge(mr.project_id, mr.iid, mr.id); }}
+                    disabled={!!processingMRs[mr.id]}
                     class="px-2.5 py-1.5 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 hover:border-emerald-500 font-semibold text-xs rounded-lg transition disabled:opacity-40 flex items-center space-x-1 shrink-0"
                   >
-                    {#if processingMRs[mr.iid] === "merging"}
+                    {#if processingMRs[mr.id] === "merging"}
                       <div class="w-3 h-3 border border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
                       <span>Merging...</span>
                     {:else}
@@ -541,11 +541,11 @@
                   </button>
 
                   <button
-                    onclick={(e) => { e.stopPropagation(); handleClose(mr.project_id, mr.iid); }}
-                    disabled={!!processingMRs[mr.iid]}
+                    onclick={(e) => { e.stopPropagation(); handleClose(mr.project_id, mr.iid, mr.id); }}
+                    disabled={!!processingMRs[mr.id]}
                     class="px-2.5 py-1.5 bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 hover:border-rose-500 font-semibold text-xs rounded-lg transition disabled:opacity-40 flex items-center space-x-1 shrink-0"
                   >
-                    {#if processingMRs[mr.iid] === "closing"}
+                    {#if processingMRs[mr.id] === "closing"}
                       <div class="w-3 h-3 border border-rose-400 border-t-transparent rounded-full animate-spin"></div>
                       <span>Closing...</span>
                     {:else}

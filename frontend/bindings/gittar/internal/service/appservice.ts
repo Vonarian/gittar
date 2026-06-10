@@ -53,7 +53,7 @@ export function GetJobLogSnippet(projectIDOrPath: string, jobID: number): $Cance
 }
 
 /**
- * MergeMergeRequest accept/merges the GitLab MR.
+ * MergeMergeRequest accepts/merges the GitLab MR.
  */
 export function MergeMergeRequest(projectID: number, mrIID: number): $CancellablePromise<void> {
     return $Call.ByID(4151525513, projectID, mrIID);
