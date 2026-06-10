@@ -128,7 +128,7 @@
   onMount(async () => {
     isLoading = true;
     await loadPollingSettings();
-    await fetchTelemetryData(true);
+    fetchTelemetryData(true);
     startPolling();
   });
 
