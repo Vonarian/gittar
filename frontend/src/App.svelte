@@ -30,6 +30,7 @@
 
   // Running polling timer reference
   let pollTimer: any = null;
+  let isFetching = false;
 
   // Derived counts for Sidebar badges
   const todosCount = $derived(telemetry?.todos?.length || 0);
@@ -61,6 +62,11 @@
 
   // Polls backend for new telemetry data
   async function fetchTelemetryData(showLoader = false) {
+    if (isFetching) {
+      console.log("[App] Telemetry fetch skipped (already in progress)");
+      return;
+    }
+    isFetching = true;
     if (showLoader) {
       isLoading = true;
     }
@@ -86,20 +92,26 @@
       }
     } finally {
       isLoading = false;
+      isFetching = false;
     }
   }
 
   function startPolling() {
     stopPolling();
-    // Schedule interval
-    pollTimer = setInterval(() => {
-      fetchTelemetryData(false);
-    }, pollIntervalSec * 1000);
+    
+    async function tick() {
+      await fetchTelemetryData(false);
+      if (pollTimer !== null) {
+        pollTimer = setTimeout(tick, pollIntervalSec * 1000);
+      }
+    }
+    
+    pollTimer = setTimeout(tick, pollIntervalSec * 1000);
   }
 
   function stopPolling() {
     if (pollTimer) {
-      clearInterval(pollTimer);
+      clearTimeout(pollTimer);
       pollTimer = null;
     }
   }
