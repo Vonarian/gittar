@@ -1,0 +1,29 @@
+# System files
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
+
+# Go build outputs
+bin/
+*.exe
+*.test
+*.prof
+
+# Wails directories
+.task/
+build/linux/appimage/build/
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+
+# Frontend node modules and build distribution
+frontend/node_modules/
+frontend/dist/
+/node_modules/
+/dist/
+
+# Local env files
+.env
+.env.local
+.env.*.local
+*.log

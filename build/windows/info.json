@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.1.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.1.0",
+			"CompanyName": "Gittar",
+			"FileDescription": "GitLab Enterprise Control Panel",
+			"LegalCopyright": "© 2026, Gittar",
+			"ProductName": "Gittar",
+			"Comments": "Gittar Desktop Control Panel"
+		}
+	}
+}
