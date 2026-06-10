@@ -27,3 +27,7 @@ frontend/dist/
 .env.local
 .env.*.local
 *.log
+
+# Agent memory files
+MEMORY.md
+memory/

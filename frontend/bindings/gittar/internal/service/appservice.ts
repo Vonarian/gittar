@@ -21,6 +21,13 @@ import * as gitlab$0 from "../gitlab/models.js";
 import * as tray$0 from "../tray/models.js";
 
 /**
+ * CloseMergeRequest updates the GitLab MR state to closed.
+ */
+export function CloseMergeRequest(projectID: number, mrIID: number): $CancellablePromise<void> {
+    return $Call.ByID(3025380849, projectID, mrIID);
+}
+
+/**
  * FetchTelemetry fetches all telemetry data concurrently.
  */
 export function FetchTelemetry(): $CancellablePromise<gitlab$0.TelemetryPayload | null> {
@@ -43,6 +50,13 @@ export function GetConfig(): $CancellablePromise<config$0.Config | null> {
  */
 export function GetJobLogSnippet(projectIDOrPath: string, jobID: number): $CancellablePromise<string> {
     return $Call.ByID(3512261036, projectIDOrPath, jobID);
+}
+
+/**
+ * MergeMergeRequest accept/merges the GitLab MR.
+ */
+export function MergeMergeRequest(projectID: number, mrIID: number): $CancellablePromise<void> {
+    return $Call.ByID(4151525513, projectID, mrIID);
 }
 
 /**

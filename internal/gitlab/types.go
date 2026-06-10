@@ -60,29 +60,38 @@ type Job struct {
 	FinishedAt *time.Time `json:"finished_at,omitempty"`
 }
 
+// HeadPipeline represents the pipeline for the head commit of a Merge Request.
+type HeadPipeline struct {
+	ID     int    `json:"id"`
+	Status string `json:"status"`
+	WebURL string `json:"web_url"`
+}
+
 // MergeRequest represents a GitLab Merge Request.
 type MergeRequest struct {
-	ID             int        `json:"id"`
-	IID            int        `json:"iid"`
-	ProjectID      int        `json:"project_id"`
-	Title          string     `json:"title"`
-	Description    string     `json:"description"`
-	State          string     `json:"state"`
-	TargetBranch   string     `json:"target_branch"`
-	SourceBranch   string     `json:"source_branch"`
-	Author         User       `json:"author"`
-	Assignees      []User     `json:"assignees"`
-	Reviewers      []User     `json:"reviewers"`
-	WebURL         string     `json:"web_url"`
-	UserNotesCount int        `json:"user_notes_count"`
-	Upvotes        int        `json:"upvotes"`
-	Downvotes      int        `json:"downvotes"`
-	WorkInProgress bool       `json:"work_in_progress"`
-	Draft          bool       `json:"draft"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	MergedAt       *time.Time `json:"merged_at,omitempty"`
-	ClosedAt       *time.Time `json:"closed_at,omitempty"`
+	ID             int           `json:"id"`
+	IID            int           `json:"iid"`
+	ProjectID      int           `json:"project_id"`
+	Title          string        `json:"title"`
+	Description    string        `json:"description"`
+	State          string        `json:"state"`
+	TargetBranch   string        `json:"target_branch"`
+	SourceBranch   string        `json:"source_branch"`
+	Author         User          `json:"author"`
+	Assignees      []User        `json:"assignees"`
+	Reviewers      []User        `json:"reviewers"`
+	WebURL         string        `json:"web_url"`
+	UserNotesCount int           `json:"user_notes_count"`
+	Upvotes        int           `json:"upvotes"`
+	Downvotes      int           `json:"downvotes"`
+	WorkInProgress bool          `json:"work_in_progress"`
+	Draft          bool          `json:"draft"`
+	Labels         []string      `json:"labels"`
+	HeadPipeline   *HeadPipeline `json:"head_pipeline,omitempty"`
+	CreatedAt      time.Time     `json:"created_at"`
+	UpdatedAt      time.Time     `json:"updated_at"`
+	MergedAt       *time.Time    `json:"merged_at,omitempty"`
+	ClosedAt       *time.Time    `json:"closed_at,omitempty"`
 }
 
 // PipelineWithJobs bundles a pipeline with its current jobs and project context.

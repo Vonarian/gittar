@@ -1,6 +1,7 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import type { PipelineWithJobs, Job } from "../../../bindings/gittar/internal/gitlab/models";
-  import { Browser } from "@wailsio/runtime";
+  import { Browser, Clipboard } from "@wailsio/runtime";
 
   interface Props {
     pipelines: PipelineWithJobs[];
@@ -8,6 +9,34 @@
   }
 
   let { pipelines = [], onSelectJobLog }: Props = $props();
+
+  // Context menu state
+  let contextMenu = $state<{ x: number; y: number; link: string } | null>(null);
+
+  function handleContextMenu(e: MouseEvent, link: string) {
+    if (!link) return;
+    e.preventDefault();
+    e.stopPropagation();
+    contextMenu = {
+      x: e.clientX,
+      y: e.clientY,
+      link
+    };
+  }
+
+  function closeContextMenu() {
+    contextMenu = null;
+  }
+
+  onMount(() => {
+    window.addEventListener("click", closeContextMenu);
+    window.addEventListener("contextmenu", closeContextMenu);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener("click", closeContextMenu);
+    window.removeEventListener("contextmenu", closeContextMenu);
+  });
 
   // Search & Filter state variables
   let searchQuery = $state("");
@@ -211,7 +240,11 @@
       </div>
     {:else}
       {#each filteredPipelines as pwj (pwj.projectPath)}
-        <div class="bg-slate-900/20 border border-slate-900/80 rounded-xl p-5 hover:border-slate-800/60 transition duration-150">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          oncontextmenu={(e) => { if (pwj.pipeline && pwj.pipeline.id > 0) handleContextMenu(e, pwj.pipeline.web_url); }}
+          class="bg-slate-900/20 border border-slate-900/80 rounded-xl p-5 hover:border-slate-800/60 transition duration-150"
+        >
           
           <!-- Project Info & Pipeline Header -->
           <div class="flex items-start justify-between flex-wrap gap-4">
@@ -276,7 +309,7 @@
                 </div>
 
                 <button
-                  onclick={() => Browser.OpenURL(pwj.pipeline.web_url)}
+                  onclick={(e) => { e.stopPropagation(); Browser.OpenURL(pwj.pipeline.web_url); }}
                   class="p-1.5 border border-slate-800 hover:border-slate-700 bg-slate-950/44 rounded-lg text-slate-400 hover:text-slate-200 transition"
                   title="Open Pipeline in Browser"
                 >
@@ -302,7 +335,11 @@
                     
                     <div class="space-y-2">
                       {#each stageJobs as job (job.id)}
-                        <div class="flex items-center justify-between text-xs min-w-0">
+                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                        <div
+                          oncontextmenu={(e) => { e.stopPropagation(); handleContextMenu(e, job.web_url); }}
+                          class="flex items-center justify-between text-xs min-w-0"
+                        >
                           <div class="flex items-center space-x-2 min-w-0 pr-2">
                             <!-- Job status icon -->
                             {#if job.status === "success"}
@@ -321,13 +358,15 @@
                               </svg>
                             {/if}
 
-                            <span class="text-slate-350 truncate font-medium" title={job.name}>{job.name}</span>
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <span class="text-slate-355 truncate font-medium hover:text-indigo-400 cursor-pointer transition" onclick={() => Browser.OpenURL(job.web_url)} title={job.name}>{job.name}</span>
                           </div>
 
                           <div class="flex items-center space-x-2 shrink-0">
                             {#if job.status === "failed"}
                               <button
-                                onclick={() => onSelectJobLog(pwj.projectPath, job.id, job.name)}
+                                onclick={(e) => { e.stopPropagation(); onSelectJobLog(pwj.projectPath, job.id, job.name); }}
                                 class="px-2 py-0.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/25 rounded text-[10px] font-semibold transition"
                               >
                                 Logs
@@ -335,7 +374,7 @@
                             {/if}
 
                             <button
-                              onclick={() => Browser.OpenURL(job.web_url)}
+                              onclick={(e) => { e.stopPropagation(); Browser.OpenURL(job.web_url); }}
                               class="text-slate-500 hover:text-slate-300 transition"
                               title="Open Job details"
                             >
@@ -357,3 +396,27 @@
     {/if}
   </div>
 </div>
+
+<!-- Custom Context Menu for Right-Click Link Copying -->
+{#if contextMenu}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="fixed z-50 bg-slate-900 border border-slate-800 rounded-lg shadow-xl py-1 text-xs text-slate-200 min-w-[120px] select-none backdrop-blur-md"
+    style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+    onclick={(e) => e.stopPropagation()}
+  >
+    <button
+      onclick={() => {
+        Clipboard.SetText(contextMenu!.link);
+        closeContextMenu();
+      }}
+      class="w-full text-left px-3 py-2 hover:bg-indigo-600 hover:text-white transition duration-150 flex items-center space-x-2"
+    >
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      </svg>
+      <span>Copy Link</span>
+    </button>
+  </div>
+{/if}

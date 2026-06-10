@@ -279,3 +279,31 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		AvatarURL:     user.AvatarURL,
 	}, nil
 }
+
+// MergeMergeRequest accept/merges the GitLab MR.
+func (s *AppService) MergeMergeRequest(projectID int, mrIID int) error {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if conf.Token == "" {
+		return fmt.Errorf("GitLab token not configured")
+	}
+
+	client := gitlab.NewClient(conf.GitLabURL, conf.Token)
+	return client.MergeMergeRequest(projectID, mrIID)
+}
+
+// CloseMergeRequest updates the GitLab MR state to closed.
+func (s *AppService) CloseMergeRequest(projectID int, mrIID int) error {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if conf.Token == "" {
+		return fmt.Errorf("GitLab token not configured")
+	}
+
+	client := gitlab.NewClient(conf.GitLabURL, conf.Token)
+	return client.CloseMergeRequest(projectID, mrIID)
+}

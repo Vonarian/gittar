@@ -1,12 +1,41 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import type { Todo } from "../../../bindings/gittar/internal/gitlab/models";
-  import { Browser } from "@wailsio/runtime";
+  import { Browser, Clipboard } from "@wailsio/runtime";
 
   interface Props {
     todos: Todo[];
   }
 
   let { todos = [] }: Props = $props();
+
+  // Context menu state
+  let contextMenu = $state<{ x: number; y: number; link: string } | null>(null);
+
+  function handleContextMenu(e: MouseEvent, link: string) {
+    if (!link) return;
+    e.preventDefault();
+    e.stopPropagation();
+    contextMenu = {
+      x: e.clientX,
+      y: e.clientY,
+      link
+    };
+  }
+
+  function closeContextMenu() {
+    contextMenu = null;
+  }
+
+  onMount(() => {
+    window.addEventListener("click", closeContextMenu);
+    window.addEventListener("contextmenu", closeContextMenu);
+  });
+
+  onDestroy(() => {
+    window.removeEventListener("click", closeContextMenu);
+    window.removeEventListener("contextmenu", closeContextMenu);
+  });
 
   // Search & Filter state variables
   let searchQuery = $state("");
@@ -215,7 +244,11 @@
       <!-- High Density List -->
       <div class="space-y-2.5">
         {#each filteredTodos as todo (todo.id)}
-          <div class="group flex items-start justify-between p-3.5 bg-slate-900/30 border border-slate-900/70 hover:border-slate-800/80 rounded-xl transition duration-150 relative">
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            oncontextmenu={(e) => handleContextMenu(e, todo.target_url)}
+            class="group flex items-start justify-between p-3.5 bg-slate-900/30 border border-slate-900/70 hover:border-slate-800/80 rounded-xl transition duration-150 relative"
+          >
             <div class="flex items-start space-x-3.5 min-w-0 pr-4">
               <!-- Author Avatar -->
               {#if todo.author?.avatar_url}
@@ -243,7 +276,14 @@
                 </div>
 
                 <!-- Todo Body -->
-                <p class="text-sm text-slate-200 mt-1.5 font-medium leading-relaxed truncate max-w-[580px]" title={todo.body}>
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                <p
+                  onclick={() => Browser.OpenURL(todo.target_url)}
+                  class="text-sm text-slate-200 mt-1.5 font-medium leading-relaxed truncate max-w-[580px] hover:text-indigo-400 transition cursor-pointer"
+                  title={todo.body}
+                >
                   {todo.body}
                 </p>
 
@@ -262,7 +302,7 @@
             <!-- Hover Action Button -->
             <div class="opacity-0 group-hover:opacity-100 transition duration-150 self-center flex items-center pr-1.5">
               <button
-                onclick={() => Browser.OpenURL(todo.target_url)}
+                onclick={(e) => { e.stopPropagation(); Browser.OpenURL(todo.target_url); }}
                 class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-850 hover:bg-slate-850 border border-slate-700 hover:border-slate-600 text-xs font-medium text-slate-200 rounded-lg transition"
               >
                 <span>View</span>
@@ -277,3 +317,27 @@
     {/if}
   </div>
 </div>
+
+<!-- Custom Context Menu for Right-Click Link Copying -->
+{#if contextMenu}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="fixed z-50 bg-slate-900 border border-slate-800 rounded-lg shadow-xl py-1 text-xs text-slate-200 min-w-[120px] select-none backdrop-blur-md"
+    style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+    onclick={(e) => e.stopPropagation()}
+  >
+    <button
+      onclick={() => {
+        Clipboard.SetText(contextMenu!.link);
+        closeContextMenu();
+      }}
+      class="w-full text-left px-3 py-2 hover:bg-indigo-600 hover:text-white transition duration-150 flex items-center space-x-2"
+    >
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      </svg>
+      <span>Copy Link</span>
+    </button>
+  </div>
+{/if}
