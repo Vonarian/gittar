@@ -298,7 +298,7 @@
         class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
       >
         <option value="all">All Groups</option>
-        {#each uniqueGroups as grp}
+        {#each uniqueGroups as grp (grp)}
           <option value={grp}>{grp}</option>
         {/each}
       </select>
@@ -309,7 +309,7 @@
         class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
       >
         <option value="all">All Projects</option>
-        {#each uniqueProjects as proj}
+        {#each uniqueProjects as proj (proj)}
           <option value={proj}>{proj}</option>
         {/each}
       </select>
@@ -320,7 +320,7 @@
         class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
       >
         <option value="all">All Users</option>
-        {#each uniqueUsers as usr}
+        {#each uniqueUsers as usr (usr)}
           <option value={usr}>{usr}</option>
         {/each}
       </select>
@@ -444,7 +444,7 @@
               <!-- Labels (dynamic color) -->
               {#if mr.labels && mr.labels.length > 0}
                 <div class="flex flex-wrap gap-1.5 mt-3">
-                  {#each mr.labels as label}
+                  {#each mr.labels as label (label)}
                     <span
                       class="px-2 py-0.5 text-[10px] font-semibold rounded-md border"
                       style="background-color: {getLabelColorHash(label).replace('hsl', 'hsla').replace(')', ', 0.08)')}; color: {getLabelColorHash(label)}; border-color: {getLabelColorHash(label).replace('hsl', 'hsla').replace(')', ', 0.25)')}"
@@ -501,7 +501,7 @@
               <!-- Assignees & Reviewers Avatars -->
               {#if (mr.assignees && mr.assignees.length > 0) || (mr.reviewers && mr.reviewers.length > 0)}
                 <div class="flex items-center -space-x-1.5">
-                  {#each mr.assignees || [] as assignee}
+                  {#each mr.assignees || [] as assignee (assignee.id || assignee.username)}
                     {#if assignee.avatar_url}
                       <img
                         src={assignee.avatar_url}
@@ -511,7 +511,7 @@
                       />
                     {/if}
                   {/each}
-                  {#each mr.reviewers || [] as reviewer}
+                  {#each mr.reviewers || [] as reviewer (reviewer.id || reviewer.username)}
                     {#if reviewer.avatar_url}
                       <img
                         src={reviewer.avatar_url}

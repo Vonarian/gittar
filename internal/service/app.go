@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"gittar/internal/config"
@@ -143,6 +144,14 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	// Wait for Todos, MRs, and Pipelines to complete
 	wg.Wait()
 	pipeWg.Wait()
+
+	// Sort pipelines alphabetically by projectName/path to prevent reordering on updates
+	sort.Slice(pipelines, func(i, j int) bool {
+		if pipelines[i].ProjectName == pipelines[j].ProjectName {
+			return pipelines[i].ProjectPath < pipelines[j].ProjectPath
+		}
+		return pipelines[i].ProjectName < pipelines[j].ProjectName
+	})
 
 	if todosErr != nil {
 		return nil, fmt.Errorf("failed to fetch todos: %w", todosErr)

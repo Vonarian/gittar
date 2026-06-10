@@ -160,7 +160,7 @@
         class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
       >
         <option value="all">All Groups</option>
-        {#each uniqueGroups as grp}
+        {#each uniqueGroups as grp (grp)}
           <option value={grp}>{grp}</option>
         {/each}
       </select>
@@ -171,7 +171,7 @@
         class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
       >
         <option value="all">All Projects</option>
-        {#each uniqueProjects as proj}
+        {#each uniqueProjects as proj (proj)}
           <option value={proj}>{proj}</option>
         {/each}
       </select>
@@ -182,7 +182,7 @@
         class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
       >
         <option value="all">All Actions</option>
-        {#each uniqueActions as action}
+        {#each uniqueActions as action (action)}
           <option value={action}>{formatActionLabel(action)}</option>
         {/each}
       </select>
@@ -193,7 +193,7 @@
         class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
       >
         <option value="all">All Authors</option>
-        {#each uniqueUsers as user}
+        {#each uniqueUsers as user (user)}
           <option value={user}>{user}</option>
         {/each}
       </select>

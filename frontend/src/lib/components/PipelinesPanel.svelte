@@ -167,7 +167,7 @@
         class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
       >
         <option value="all">All Groups</option>
-        {#each uniqueGroups as grp}
+        {#each uniqueGroups as grp (grp)}
           <option value={grp}>{grp}</option>
         {/each}
       </select>
@@ -178,7 +178,7 @@
         class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
       >
         <option value="all">All Projects</option>
-        {#each uniqueProjects as name}
+        {#each uniqueProjects as name (name)}
           <option value={name}>{name}</option>
         {/each}
       </select>
