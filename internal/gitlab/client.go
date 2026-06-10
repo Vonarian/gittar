@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -350,7 +351,7 @@ func (c *Client) doWriteRequest(method, apiPath string, body interface{}) ([]byt
 		if err != nil {
 			return nil, err
 		}
-		bodyReader = strings.NewReader(string(bodyBytes))
+		bodyReader = bytes.NewReader(bodyBytes)
 	}
 
 	req, err := http.NewRequest(method, fullURL, bodyReader)
@@ -376,14 +377,14 @@ func (c *Client) doWriteRequest(method, apiPath string, body interface{}) ([]byt
 	return io.ReadAll(resp.Body)
 }
 
-// MergeMergeRequest accept/merges the MR.
+// MergeMergeRequest accepts/merges the MR.
 func (c *Client) MergeMergeRequest(projectID int, mrIID int) error {
 	path := fmt.Sprintf("projects/%d/merge_requests/%d/merge", projectID, mrIID)
 	_, err := c.doWriteRequest("PUT", path, nil)
 	return err
 }
 
-// CloseMergeRequest updates the MR state to close.
+// CloseMergeRequest updates the MR state to closed.
 func (c *Client) CloseMergeRequest(projectID int, mrIID int) error {
 	path := fmt.Sprintf("projects/%d/merge_requests/%d", projectID, mrIID)
 	body := map[string]string{"state_event": "close"}

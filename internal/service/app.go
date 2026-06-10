@@ -289,7 +289,7 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	}, nil
 }
 
-// MergeMergeRequest accept/merges the GitLab MR.
+// MergeMergeRequest accepts/merges the GitLab MR.
 func (s *AppService) MergeMergeRequest(projectID int, mrIID int) error {
 	conf, err := config.LoadConfig()
 	if err != nil {
