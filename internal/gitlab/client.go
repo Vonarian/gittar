@@ -37,10 +37,20 @@ func NewClient(baseURL, token string) *Client {
 	// Create a token bucket rate limiter: 8 requests per second
 	limiter := time.Tick(125 * time.Millisecond)
 
+	transport := &http.Transport{
+		MaxIdleConns:        10,
+		MaxIdleConnsPerHost: 5,
+		MaxConnsPerHost:     5, // Limit concurrent connections to 5 to prevent server-side block/drop
+		IdleConnTimeout:     90 * time.Second,
+	}
+
 	return &Client{
 		BaseURL:    baseURL,
 		Token:      token,
-		HTTPClient: &http.Client{Timeout: 30 * time.Second},
+		HTTPClient: &http.Client{
+			Timeout:   30 * time.Second,
+			Transport: transport,
+		},
 		cache:      make(map[string]*cacheEntry),
 		limiter:    limiter,
 	}
