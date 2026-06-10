@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 
 	"gittar/internal/config"
@@ -144,6 +145,14 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	wg.Wait()
 	pipeWg.Wait()
 
+	// Sort pipelines alphabetically by projectName/path to prevent reordering on updates
+	sort.Slice(pipelines, func(i, j int) bool {
+		if pipelines[i].ProjectName == pipelines[j].ProjectName {
+			return pipelines[i].ProjectPath < pipelines[j].ProjectPath
+		}
+		return pipelines[i].ProjectName < pipelines[j].ProjectName
+	})
+
 	if todosErr != nil {
 		return nil, fmt.Errorf("failed to fetch todos: %w", todosErr)
 	}
@@ -278,4 +287,32 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		Username:      user.Username,
 		AvatarURL:     user.AvatarURL,
 	}, nil
+}
+
+// MergeMergeRequest accepts/merges the GitLab MR.
+func (s *AppService) MergeMergeRequest(projectID int, mrIID int) error {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if conf.Token == "" {
+		return fmt.Errorf("GitLab token not configured")
+	}
+
+	client := gitlab.NewClient(conf.GitLabURL, conf.Token)
+	return client.MergeMergeRequest(projectID, mrIID)
+}
+
+// CloseMergeRequest updates the GitLab MR state to closed.
+func (s *AppService) CloseMergeRequest(projectID int, mrIID int) error {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if conf.Token == "" {
+		return fmt.Errorf("GitLab token not configured")
+	}
+
+	client := gitlab.NewClient(conf.GitLabURL, conf.Token)
+	return client.CloseMergeRequest(projectID, mrIID)
 }

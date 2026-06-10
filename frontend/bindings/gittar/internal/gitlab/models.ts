@@ -10,6 +10,38 @@ import { Create as $Create } from "@wailsio/runtime";
 import * as time$0 from "../../../time/models.js";
 
 /**
+ * HeadPipeline represents the pipeline for the head commit of a Merge Request.
+ */
+export class HeadPipeline {
+    "id": number;
+    "status": string;
+    "web_url": string;
+
+    /** Creates a new HeadPipeline instance. */
+    constructor($$source: Partial<HeadPipeline> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("web_url" in $$source)) {
+            this["web_url"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new HeadPipeline instance from a string or object.
+     */
+    static createFrom($$source: any = {}): HeadPipeline {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new HeadPipeline($$parsedSource as Partial<HeadPipeline>);
+    }
+}
+
+/**
  * Job represents a GitLab Job.
  */
 export class Job {
@@ -83,6 +115,8 @@ export class MergeRequest {
     "downvotes": number;
     "work_in_progress": boolean;
     "draft": boolean;
+    "labels": string[];
+    "head_pipeline"?: HeadPipeline | null;
     "created_at": time$0.Time;
     "updated_at": time$0.Time;
     "merged_at"?: time$0.Time | null;
@@ -141,6 +175,9 @@ export class MergeRequest {
         if (!("draft" in $$source)) {
             this["draft"] = false;
         }
+        if (!("labels" in $$source)) {
+            this["labels"] = [];
+        }
         if (!("created_at" in $$source)) {
             this["created_at"] = null;
         }
@@ -158,6 +195,8 @@ export class MergeRequest {
         const $$createField8_0 = $$createType0;
         const $$createField9_0 = $$createType1;
         const $$createField10_0 = $$createType1;
+        const $$createField17_0 = $$createType2;
+        const $$createField18_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("author" in $$parsedSource) {
             $$parsedSource["author"] = $$createField8_0($$parsedSource["author"]);
@@ -167,6 +206,12 @@ export class MergeRequest {
         }
         if ("reviewers" in $$parsedSource) {
             $$parsedSource["reviewers"] = $$createField10_0($$parsedSource["reviewers"]);
+        }
+        if ("labels" in $$parsedSource) {
+            $$parsedSource["labels"] = $$createField17_0($$parsedSource["labels"]);
+        }
+        if ("head_pipeline" in $$parsedSource) {
+            $$parsedSource["head_pipeline"] = $$createField18_0($$parsedSource["head_pipeline"]);
         }
         return new MergeRequest($$parsedSource as Partial<MergeRequest>);
     }
@@ -279,8 +324,8 @@ export class PipelineWithJobs {
      * Creates a new PipelineWithJobs instance from a string or object.
      */
     static createFrom($$source: any = {}): PipelineWithJobs {
-        const $$createField0_0 = $$createType2;
-        const $$createField1_0 = $$createType4;
+        const $$createField0_0 = $$createType5;
+        const $$createField1_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("pipeline" in $$parsedSource) {
             $$parsedSource["pipeline"] = $$createField0_0($$parsedSource["pipeline"]);
@@ -364,9 +409,9 @@ export class TelemetryPayload {
      * Creates a new TelemetryPayload instance from a string or object.
      */
     static createFrom($$source: any = {}): TelemetryPayload {
-        const $$createField0_0 = $$createType6;
-        const $$createField1_0 = $$createType8;
-        const $$createField2_0 = $$createType10;
+        const $$createField0_0 = $$createType9;
+        const $$createField1_0 = $$createType11;
+        const $$createField2_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("todos" in $$parsedSource) {
             $$parsedSource["todos"] = $$createField0_0($$parsedSource["todos"]);
@@ -432,7 +477,7 @@ export class Todo {
      * Creates a new Todo instance from a string or object.
      */
     static createFrom($$source: any = {}): Todo {
-        const $$createField1_0 = $$createType11;
+        const $$createField1_0 = $$createType14;
         const $$createField2_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("project" in $$parsedSource) {
@@ -492,13 +537,16 @@ export class User {
 // Private type creation functions
 const $$createType0 = User.createFrom;
 const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = Pipeline.createFrom;
-const $$createType3 = Job.createFrom;
-const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = Todo.createFrom;
-const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = PipelineWithJobs.createFrom;
-const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = MergeRequest.createFrom;
-const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = ProjectRef.createFrom;
+const $$createType2 = $Create.Array($Create.Any);
+const $$createType3 = HeadPipeline.createFrom;
+const $$createType4 = $Create.Nullable($$createType3);
+const $$createType5 = Pipeline.createFrom;
+const $$createType6 = Job.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = Todo.createFrom;
+const $$createType9 = $Create.Array($$createType8);
+const $$createType10 = PipelineWithJobs.createFrom;
+const $$createType11 = $Create.Array($$createType10);
+const $$createType12 = MergeRequest.createFrom;
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = ProjectRef.createFrom;

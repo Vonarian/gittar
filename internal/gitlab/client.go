@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -216,6 +217,21 @@ func (c *Client) GetPipelineWithJobs(projectIDOrPath string) (*PipelineWithJobs,
 	}, nil
 }
 
+// GetSingleMergeRequest fetches detailed information for a single MR.
+func (c *Client) GetSingleMergeRequest(projectID int, mrIID int) (*MergeRequest, error) {
+	path := fmt.Sprintf("projects/%d/merge_requests/%d", projectID, mrIID)
+	data, _, err := c.doRequest(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var mr MergeRequest
+	if err := json.Unmarshal(data, &mr); err != nil {
+		return nil, err
+	}
+	return &mr, nil
+}
+
 // GetMergeRequests fetches merge requests authored by or assigned to the user.
 func (c *Client) GetMergeRequests(userID int) ([]MergeRequest, error) {
 	// Fetch assigned MRs
@@ -265,7 +281,30 @@ func (c *Client) GetMergeRequests(userID int) ([]MergeRequest, error) {
 		result = append(result, mr)
 	}
 
-	return result, nil
+	// Fetch detailed MR information for each MR concurrently to populate head_pipeline
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	detailedMRs := make([]MergeRequest, len(result))
+
+	for i, mr := range result {
+		wg.Add(1)
+		go func(idx int, m MergeRequest) {
+			defer wg.Done()
+			detailed, err := c.GetSingleMergeRequest(m.ProjectID, m.IID)
+			if err == nil && detailed != nil {
+				mu.Lock()
+				detailedMRs[idx] = *detailed
+				mu.Unlock()
+			} else {
+				mu.Lock()
+				detailedMRs[idx] = m
+				mu.Unlock()
+			}
+		}(i, mr)
+	}
+	wg.Wait()
+
+	return detailedMRs, nil
 }
 
 // GetJobLogSnippet fetches the final 10 lines of a job's build log on failure.
@@ -297,4 +336,58 @@ func (c *Client) GetGroupProjects(groupIDOrPath string) ([]ProjectRef, error) {
 		return nil, err
 	}
 	return projects, nil
+}
+
+// doWriteRequest executes a write operation (POST/PUT/DELETE) on the GitLab API.
+func (c *Client) doWriteRequest(method, apiPath string, body interface{}) ([]byte, error) {
+	// Wait for rate limit slot
+	<-c.limiter
+
+	fullURL := fmt.Sprintf("%s/api/v4/%s", c.BaseURL, strings.TrimPrefix(apiPath, "/"))
+
+	var bodyReader io.Reader
+	if body != nil {
+		bodyBytes, err := json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+		bodyReader = bytes.NewReader(bodyBytes)
+	}
+
+	req, err := http.NewRequest(method, fullURL, bodyReader)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("PRIVATE-TOKEN", c.Token)
+	req.Header.Set("User-Agent", "Gittar-DevOps-Panel")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("gitlab api error (%d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+// MergeMergeRequest accepts/merges the MR.
+func (c *Client) MergeMergeRequest(projectID int, mrIID int) error {
+	path := fmt.Sprintf("projects/%d/merge_requests/%d/merge", projectID, mrIID)
+	_, err := c.doWriteRequest("PUT", path, nil)
+	return err
+}
+
+// CloseMergeRequest updates the MR state to closed.
+func (c *Client) CloseMergeRequest(projectID int, mrIID int) error {
+	path := fmt.Sprintf("projects/%d/merge_requests/%d", projectID, mrIID)
+	body := map[string]string{"state_event": "close"}
+	_, err := c.doWriteRequest("PUT", path, body)
+	return err
 }

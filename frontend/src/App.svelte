@@ -185,6 +185,7 @@
         <MRsPanel
           mergeRequests={telemetry?.mergeRequests || []}
           {username}
+          onRefresh={() => fetchTelemetryData(true)}
         />
       {:else if currentTab === "setup"}
         <div class="h-full overflow-y-auto p-6">
