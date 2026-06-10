@@ -13,6 +13,9 @@ import (
 // AppService handles bindings and telemetry orchestration.
 type AppService struct {
 	trayService    *tray.TrayService
+	gitlabClient   *gitlab.Client
+	gitlabURL      string
+	gitlabToken    string
 	pipelineStates map[string]string
 	seenTodoIDs    map[int]bool
 	seenMRIDs      map[int]bool
@@ -28,6 +31,19 @@ func NewAppService() *AppService {
 		seenMRIDs:      make(map[int]bool),
 		isFirstFetch:   true,
 	}
+}
+
+// getGitLabClient retrieves the cached GitLab client or creates one if the config changed.
+func (s *AppService) getGitLabClient(conf *config.Config) *gitlab.Client {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+
+	if s.gitlabClient == nil || s.gitlabURL != conf.GitLabURL || s.gitlabToken != conf.Token {
+		s.gitlabClient = gitlab.NewClient(conf.GitLabURL, conf.Token)
+		s.gitlabURL = conf.GitLabURL
+		s.gitlabToken = conf.Token
+	}
+	return s.gitlabClient
 }
 
 // SetTray links the system tray manager to the application service.
@@ -55,7 +71,7 @@ func (s *AppService) GetJobLogSnippet(projectIDOrPath string, jobID int) (string
 		return "", fmt.Errorf("GitLab token not configured")
 	}
 
-	client := gitlab.NewClient(conf.GitLabURL, conf.Token)
+	client := s.getGitLabClient(conf)
 	return client.GetJobLogSnippet(projectIDOrPath, jobID)
 }
 
@@ -69,7 +85,7 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		return &gitlab.TelemetryPayload{Error: "unconfigured"}, nil
 	}
 
-	client := gitlab.NewClient(conf.GitLabURL, conf.Token)
+	client := s.getGitLabClient(conf)
 
 	// 1. Fetch User details to verify connection and get ID
 	user, err := client.GetCurrentUser()
@@ -299,7 +315,7 @@ func (s *AppService) MergeMergeRequest(projectID int, mrIID int) error {
 		return fmt.Errorf("GitLab token not configured")
 	}
 
-	client := gitlab.NewClient(conf.GitLabURL, conf.Token)
+	client := s.getGitLabClient(conf)
 	return client.MergeMergeRequest(projectID, mrIID)
 }
 
@@ -313,6 +329,6 @@ func (s *AppService) CloseMergeRequest(projectID int, mrIID int) error {
 		return fmt.Errorf("GitLab token not configured")
 	}
 
-	client := gitlab.NewClient(conf.GitLabURL, conf.Token)
+	client := s.getGitLabClient(conf)
 	return client.CloseMergeRequest(projectID, mrIID)
 }
