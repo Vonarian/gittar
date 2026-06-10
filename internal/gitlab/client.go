@@ -13,8 +13,9 @@ import (
 )
 
 type cacheEntry struct {
-	data []byte
-	etag string
+	data      []byte
+	etag      string
+	fetchedAt time.Time
 }
 
 // Client is a rate-limited, ETag-cached GitLab client.
@@ -59,10 +60,22 @@ func NewClient(baseURL, token string) *Client {
 // doRequest performs a rate-limited, cached HTTP request.
 // It returns the response body data, a boolean indicating if it was from cache, and an error.
 func (c *Client) doRequest(apiPath string) ([]byte, bool, error) {
+	fullURL := fmt.Sprintf("%s/api/v4/%s", c.BaseURL, strings.TrimPrefix(apiPath, "/"))
+
+	// 1. Check if cached and within TTL (10 seconds) to bypass network & rate limits
+	c.cacheMu.Lock()
+	entry, cached := c.cache[fullURL]
+	if cached && time.Since(entry.fetchedAt) < 10*time.Second {
+		c.cacheMu.Unlock()
+		fmt.Printf("[Go Backend] doRequest Cache HIT (TTL): %s\n", apiPath)
+		return entry.data, true, nil
+	}
+	c.cacheMu.Unlock()
+
+	fmt.Printf("[Go Backend] doRequest path=%s (waiting for rate limit)\n", apiPath)
 	// Wait for rate limit slot
 	<-c.limiter
-
-	fullURL := fmt.Sprintf("%s/api/v4/%s", c.BaseURL, strings.TrimPrefix(apiPath, "/"))
+	fmt.Printf("[Go Backend] doRequest path=%s (got rate limit, starting HTTP request)\n", apiPath)
 
 	req, err := http.NewRequest("GET", fullURL, nil)
 	if err != nil {
@@ -72,11 +85,7 @@ func (c *Client) doRequest(apiPath string) ([]byte, bool, error) {
 	req.Header.Set("PRIVATE-TOKEN", c.Token)
 	req.Header.Set("User-Agent", "Gittar-DevOps-Panel")
 
-	// Apply ETag cache headers
-	c.cacheMu.Lock()
-	entry, cached := c.cache[fullURL]
-	c.cacheMu.Unlock()
-
+	// Apply ETag cache headers if available
 	if cached && entry.etag != "" {
 		req.Header.Set("If-None-Match", entry.etag)
 	}
@@ -89,6 +98,10 @@ func (c *Client) doRequest(apiPath string) ([]byte, bool, error) {
 
 	if resp.StatusCode == http.StatusNotModified {
 		if cached {
+			// Update the fetchedAt timestamp so we don't request again for another TTL cycle
+			c.cacheMu.Lock()
+			entry.fetchedAt = time.Now()
+			c.cacheMu.Unlock()
 			return entry.data, true, nil
 		}
 		return nil, false, fmt.Errorf("server returned 304 but cache entry was missing")
@@ -104,16 +117,14 @@ func (c *Client) doRequest(apiPath string) ([]byte, bool, error) {
 		return nil, false, err
 	}
 
-	// Update cache with new ETag
-	etag := resp.Header.Get("ETag")
-	if etag != "" {
-		c.cacheMu.Lock()
-		c.cache[fullURL] = &cacheEntry{
-			data: bodyBytes,
-			etag: etag,
-		}
-		c.cacheMu.Unlock()
+	// Cache the response and update fetchedAt
+	c.cacheMu.Lock()
+	c.cache[fullURL] = &cacheEntry{
+		data:      bodyBytes,
+		etag:      resp.Header.Get("ETag"),
+		fetchedAt: time.Now(),
 	}
+	c.cacheMu.Unlock()
 
 	return bodyBytes, false, nil
 }
@@ -319,9 +330,11 @@ func (c *Client) GetMergeRequests(userID int) ([]MergeRequest, error) {
 
 // GetJobLogSnippet fetches the final 10 lines of a job's build log on failure.
 func (c *Client) GetJobLogSnippet(projectIDOrPath string, jobID int) (string, error) {
+	fmt.Printf("[Go Backend] GetJobLogSnippet project=%s, jobID=%d (fetching trace)\n", projectIDOrPath, jobID)
 	escapedPath := url.PathEscape(projectIDOrPath)
 	data, _, err := c.doRequest(fmt.Sprintf("projects/%s/jobs/%d/trace", escapedPath, jobID))
 	if err != nil {
+		fmt.Printf("[Go Backend] GetJobLogSnippet project=%s, jobID=%d error: %v\n", projectIDOrPath, jobID, err)
 		return "", err
 	}
 
@@ -330,6 +343,7 @@ func (c *Client) GetJobLogSnippet(projectIDOrPath string, jobID int) (string, er
 	if len(lines) > 20 {
 		lines = lines[len(lines)-20:]
 	}
+	fmt.Printf("[Go Backend] GetJobLogSnippet project=%s, jobID=%d success: fetched %d bytes, tail lines=%d\n", projectIDOrPath, jobID, len(data), len(lines))
 	return strings.Join(lines, "\n"), nil
 }
 
