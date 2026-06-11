@@ -119,7 +119,9 @@
             </span>
           {/if}
           {#if runningPipelines > 0}
-            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse-glow"></span>
+            <span class="px-2 py-0.5 text-xs font-semibold bg-amber-500/10 text-amber-400 rounded-full border border-amber-500/20 animate-badge-pulse">
+              {runningPipelines}
+            </span>
           {/if}
         </div>
       </button>
