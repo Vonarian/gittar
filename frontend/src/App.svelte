@@ -193,7 +193,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="h-10 shrink-0 select-none cursor-default flex items-center justify-between px-4 border-b border-slate-900/10"
-      style="-webkit-app-region: drag"
+      style="-webkit-app-region: drag; --wails-draggable: drag;"
       role="none"
       ondblclick={handleDoubleClickTitlebar}
     >
@@ -206,7 +206,7 @@
 
       <!-- Custom Fluent Windows Titlebar Controls -->
       {#if isWindows}
-        <div class="flex items-center h-full -mr-4" style="-webkit-app-region: no-drag">
+        <div class="flex items-center h-full -mr-4" style="-webkit-app-region: no-drag; --wails-draggable: no-drag;">
           <!-- Minimize -->
           <button
             onclick={() => Window.Minimise()}
