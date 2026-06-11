@@ -135,15 +135,17 @@
     isInspectorOpen = true;
   }
 
-  function updateMaximisedState() {
-    Window.IsMaximised().then((state) => {
-      isMaximised = state;
-    });
+  async function updateMaximisedState() {
+    try {
+      isMaximised = await Window.IsMaximised();
+    } catch (err) {
+      console.warn("Failed to fetch maximised state:", err);
+    }
   }
 
   async function handleToggleMaximize() {
     await Window.ToggleMaximise();
-    updateMaximisedState();
+    await updateMaximisedState();
   }
 
   function handleDoubleClickTitlebar() {
@@ -209,6 +211,8 @@
         <div class="flex items-center h-full -mr-4" style="-webkit-app-region: no-drag; --wails-draggable: no-drag;">
           <!-- Minimize -->
           <button
+            type="button"
+            aria-label="Minimize"
             onclick={() => Window.Minimise()}
             class="h-10 w-12 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors duration-150 cursor-pointer"
             title="Minimize"
@@ -220,6 +224,8 @@
           
           <!-- Maximize / Restore -->
           <button
+            type="button"
+            aria-label={isMaximised ? "Restore" : "Maximize"}
             onclick={handleToggleMaximize}
             class="h-10 w-12 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors duration-150 cursor-pointer"
             title={isMaximised ? "Restore" : "Maximize"}
@@ -240,6 +246,8 @@
           
           <!-- Close -->
           <button
+            type="button"
+            aria-label="Close"
             onclick={() => Window.Close()}
             class="h-10 w-12 flex items-center justify-center text-slate-400 hover:text-white hover:bg-rose-600 transition-colors duration-150 cursor-pointer"
             title="Close"
