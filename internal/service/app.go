@@ -321,7 +321,11 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 
 	// Update system tray label
 	if s.trayService != nil {
-		s.trayService.UpdateTray(passingCount, failingCount, runningCount)
+		trayFailing := failingCount
+		if conf != nil && conf.IgnoreFailedPipelines {
+			trayFailing = 0
+		}
+		s.trayService.UpdateTray(passingCount, trayFailing, runningCount)
 	}
 	s.stateMu.Unlock()
 
@@ -379,4 +383,46 @@ func (s *AppService) CloseMergeRequest(projectID int, mrIID int) error {
 
 	client := s.getGitLabClient(conf)
 	return client.CloseMergeRequest(projectID, mrIID)
+}
+
+// MarkTodoAsDone marks the pending todo as done.
+func (s *AppService) MarkTodoAsDone(todoID int) error {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if conf.Token == "" {
+		return fmt.Errorf("GitLab token not configured")
+	}
+
+	client := s.getGitLabClient(conf)
+	return client.MarkTodoAsDone(todoID)
+}
+
+// RetryPipeline retries a failed pipeline.
+func (s *AppService) RetryPipeline(projectPath string, pipelineID int) error {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if conf.Token == "" {
+		return fmt.Errorf("GitLab token not configured")
+	}
+
+	client := s.getGitLabClient(conf)
+	return client.RetryPipeline(projectPath, pipelineID)
+}
+
+// CancelPipeline cancels a running pipeline.
+func (s *AppService) CancelPipeline(projectPath string, pipelineID int) error {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if conf.Token == "" {
+		return fmt.Errorf("GitLab token not configured")
+	}
+
+	client := s.getGitLabClient(conf)
+	return client.CancelPipeline(projectPath, pipelineID)
 }
