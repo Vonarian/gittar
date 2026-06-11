@@ -5,11 +5,11 @@
 	"info": {
 		"0000": {
 			"ProductVersion": "0.1.0",
-			"CompanyName": "Gittar",
-			"FileDescription": "GitLab Enterprise Control Panel",
-			"LegalCopyright": "© 2026, Gittar",
-			"ProductName": "Gittar",
-			"Comments": "Gittar Desktop Control Panel"
+			"CompanyName": "My Company",
+			"FileDescription": "My Product Description",
+			"LegalCopyright": "© now, My Company",
+			"ProductName": "My Product",
+			"Comments": "This is a comment"
 		}
 	}
 }

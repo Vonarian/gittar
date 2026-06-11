@@ -503,6 +503,7 @@
                 </div>
 
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                 <p
                   onclick={() => Browser.OpenURL(todo.target_url)}
                   class="text-sm text-slate-200 mt-2 font-medium leading-normal hover:text-indigo-400 transition cursor-pointer select-none line-clamp-2"
@@ -597,6 +598,7 @@
                     </div>
 
                     <!-- svelte-ignore a11y_click_events_have_key_events -->
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                     <p
                       onclick={() => Browser.OpenURL(todo.target_url)}
                       class="text-xs text-slate-350 mt-2 font-medium leading-normal hover:text-indigo-400 transition cursor-pointer select-none line-clamp-2"

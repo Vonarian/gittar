@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=Gittar
-Comment=GitLab Enterprise Control Panel
+Name=My Product
+Comment=My Product Description
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/gittar %u
+Exec=/usr/local/bin/ %u
 Terminal=false
 Type=Application
-Icon=gittar
+Icon=
 Categories=Utility;
-StartupWMClass=gittar
+StartupWMClass=
 
  

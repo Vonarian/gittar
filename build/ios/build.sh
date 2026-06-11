@@ -2,8 +2,8 @@
 set -e
 
 # Build configuration
-APP_NAME="gittar"
-BUNDLE_ID="com.vonarian.gittar"
+APP_NAME=""
+BUNDLE_ID=""
 VERSION="0.1.0"
 BUILD_NUMBER="0.1.0"
 BUILD_DIR="build/ios"

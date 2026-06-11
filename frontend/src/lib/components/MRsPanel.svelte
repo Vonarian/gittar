@@ -732,6 +732,7 @@
               >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                 <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-100 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
@@ -759,6 +760,7 @@
               >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                 <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-100 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
@@ -786,6 +788,7 @@
               >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                 <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-100 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
@@ -822,6 +825,7 @@
               <div class="group p-3 bg-slate-950/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150">
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                 <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-200 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
@@ -858,6 +862,7 @@
               <div class="group p-3 bg-slate-950/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150">
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                 <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-200 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
