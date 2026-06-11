@@ -150,11 +150,13 @@
 
   // Drag and Drop Event Handlers
   function handleDragStart(e: DragEvent, todo: Todo) {
-    draggedTodo = todo;
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", todo.id.toString());
     }
+    setTimeout(() => {
+      draggedTodo = todo;
+    }, 0);
   }
 
   function handleDragEnd() {
@@ -477,6 +479,7 @@
                 ondragstart={(e) => handleDragStart(e, todo)}
                 ondragend={handleDragEnd}
                 class="group flex flex-col p-3.5 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl cursor-grab active:cursor-grabbing transition-all duration-200 relative select-none"
+                class:opacity-40={draggedTodo?.id === todo.id}
               >
                 <!-- Drag Grip Icon -->
                 <div class="absolute right-3 top-3 opacity-0 group-hover:opacity-40 transition duration-150 text-slate-400">

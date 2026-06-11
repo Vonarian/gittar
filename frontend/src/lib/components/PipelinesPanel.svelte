@@ -22,10 +22,7 @@
 
   let viewMode = $state("list");
 
-  // Drag and drop state
-  let draggedPWJ = $state<PipelineWithJobs | null>(null);
-  let isDraggingOverRunning = $state(false);
-  let isDraggingOverCanceled = $state(false);
+
 
   // Loading indicator for pipeline actions
   let actionLoading = $state<Record<number, boolean>>({});
@@ -201,68 +198,7 @@
     }
   }
 
-  // Drag and Drop handlers
-  function handleDragStart(e: DragEvent, pwj: PipelineWithJobs) {
-    draggedPWJ = pwj;
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", pwj.pipeline.id.toString());
-    }
-  }
 
-  function handleDragEnd() {
-    draggedPWJ = null;
-    isDraggingOverRunning = false;
-    isDraggingOverCanceled = false;
-  }
-
-  // Dropping on Running column (Retry action)
-  function handleDragOverRunning(e: DragEvent) {
-    e.preventDefault();
-    if (draggedPWJ && draggedPWJ.pipeline.status !== "running" && draggedPWJ.pipeline.status !== "pending") {
-      isDraggingOverRunning = true;
-    }
-  }
-
-  function handleDragLeaveRunning() {
-    isDraggingOverRunning = false;
-  }
-
-  async function handleDropRunning(e: DragEvent) {
-    e.preventDefault();
-    isDraggingOverRunning = false;
-    if (draggedPWJ) {
-      const pwj = draggedPWJ;
-      if (pwj.pipeline.status !== "running" && pwj.pipeline.status !== "pending") {
-        await handleRetry(pwj.projectPath, pwj.pipeline.id);
-      }
-      draggedPWJ = null;
-    }
-  }
-
-  // Dropping on Canceled column (Cancel action)
-  function handleDragOverCanceled(e: DragEvent) {
-    e.preventDefault();
-    if (draggedPWJ && (draggedPWJ.pipeline.status === "running" || draggedPWJ.pipeline.status === "pending")) {
-      isDraggingOverCanceled = true;
-    }
-  }
-
-  function handleDragLeaveCanceled() {
-    isDraggingOverCanceled = false;
-  }
-
-  async function handleDropCanceled(e: DragEvent) {
-    e.preventDefault();
-    isDraggingOverCanceled = false;
-    if (draggedPWJ) {
-      const pwj = draggedPWJ;
-      if (pwj.pipeline.status === "running" || pwj.pipeline.status === "pending") {
-        await handleCancel(pwj.projectPath, pwj.pipeline.id);
-      }
-      draggedPWJ = null;
-    }
-  }
 
   // Color code status capsules
   function getPipelineStatusClasses(status: string): string {
@@ -654,12 +590,8 @@
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
             {#each pendingPipelines as pwj (pwj.projectPath)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
-                draggable="true"
-                ondragstart={(e) => handleDragStart(e, pwj)}
-                ondragend={handleDragEnd}
-                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl transition"
               >
                 <div class="text-[10px] font-bold text-indigo-400 truncate">{pwj.projectPath}</div>
                 <h4 class="text-xs font-semibold text-slate-200 mt-1 truncate">{pwj.projectName}</h4>
@@ -672,42 +604,31 @@
           </div>
         </div>
 
-        <!-- Column 2: Running (Drop target for retrying pipelines) -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          ondragover={handleDragOverRunning}
-          ondragleave={handleDragLeaveRunning}
-          ondrop={handleDropRunning}
-          class="flex-1 min-w-[260px] max-w-[320px] rounded-2xl p-3.5 flex flex-col h-full border-2 transition-all duration-200 {isDraggingOverRunning ? 'bg-amber-955/10 border-amber-500/80' : draggedPWJ && draggedPWJ.pipeline.status !== 'running' && draggedPWJ.pipeline.status !== 'pending' ? 'bg-slate-900/10 border-dashed border-amber-500/30' : 'bg-slate-900/15 border-slate-900/80'}"
-        >
+        <!-- Column 2: Running -->
+        <div class="flex-1 min-w-[260px] max-w-[320px] bg-slate-900/15 border border-slate-900/80 rounded-2xl p-3.5 flex flex-col h-full">
           <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-900/50 shrink-0">
             <h3 class="text-xs font-bold uppercase tracking-wider text-amber-400">Running</h3>
             <span class="px-1.5 py-0.5 text-[10px] font-bold bg-amber-500/10 text-amber-400 rounded-full">{runningPipelines.length}</span>
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
-            {#if draggedPWJ && draggedPWJ.pipeline.status !== 'running' && draggedPWJ.pipeline.status !== 'pending'}
-              <div class="h-20 flex flex-col items-center justify-center text-center text-slate-550 border border-dashed border-amber-500/20 rounded-xl bg-amber-500/[0.02] p-3 pointer-events-none">
-                <svg class="w-4 h-4 text-amber-500 animate-spin mb-1" fill="none" viewBox="0 0 24 24">
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <div class="text-[9px] font-bold">Drop to Retry Pipeline</div>
-              </div>
-            {/if}
-
             {#each runningPipelines as pwj (pwj.projectPath)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
-                draggable="true"
-                ondragstart={(e) => handleDragStart(e, pwj)}
-                ondragend={handleDragEnd}
-                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl transition"
               >
                 <div class="text-[10px] font-bold text-indigo-400 truncate">{pwj.projectPath}</div>
                 <h4 class="text-xs font-semibold text-slate-200 mt-1 truncate">{pwj.projectName}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500 font-mono">
                   <span>{formatSHA(pwj.pipeline.sha)}</span>
-                  <div class="w-2.5 h-2.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div class="flex items-center space-x-2">
+                    <button
+                      onclick={(e) => { e.stopPropagation(); handleCancel(pwj.projectPath, pwj.pipeline.id); }}
+                      disabled={actionLoading[pwj.pipeline.id]}
+                      class="px-1.5 py-0.5 rounded bg-rose-650/10 hover:bg-rose-650 text-rose-400 hover:text-white border border-rose-500/25 hover:border-rose-500 uppercase text-[8px] font-bold transition"
+                    >
+                      cancel
+                    </button>
+                    <div class="w-2.5 h-2.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
                 </div>
               </div>
             {/each}
@@ -742,12 +663,8 @@
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
             {#each failedPipelines as pwj (pwj.projectPath)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
-                draggable="true"
-                ondragstart={(e) => handleDragStart(e, pwj)}
-                ondragend={handleDragEnd}
-                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl transition"
               >
                 <div class="text-[10px] font-bold text-indigo-400 truncate">{pwj.projectPath}</div>
                 <h4 class="text-xs font-semibold text-slate-200 mt-1 truncate">{pwj.projectName}</h4>
@@ -755,6 +672,7 @@
                   <span>{formatSHA(pwj.pipeline.sha)}</span>
                   <button
                     onclick={(e) => { e.stopPropagation(); handleRetry(pwj.projectPath, pwj.pipeline.id); }}
+                    disabled={actionLoading[pwj.pipeline.id]}
                     class="px-1.5 py-0.5 rounded bg-rose-650/10 hover:bg-rose-650 text-rose-400 hover:text-white border border-rose-500/25 hover:border-rose-500 uppercase text-[8px] font-bold transition"
                   >
                     failed (retry)
@@ -765,35 +683,16 @@
           </div>
         </div>
 
-        <!-- Column 5: Canceled / Other (Drop target for canceling running pipelines) -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          ondragover={handleDragOverCanceled}
-          ondragleave={handleDragLeaveCanceled}
-          ondrop={handleDropCanceled}
-          class="flex-1 min-w-[260px] max-w-[320px] rounded-2xl p-3.5 flex flex-col h-full border-2 transition-all duration-200 {isDraggingOverCanceled ? 'bg-rose-955/15 border-rose-500/80 shadow-lg shadow-rose-600/5' : draggedPWJ && (draggedPWJ.pipeline.status === 'running' || draggedPWJ.pipeline.status === 'pending') ? 'bg-slate-900/10 border-dashed border-rose-500/30' : 'bg-slate-900/15 border-slate-900/80'}"
-        >
+        <!-- Column 5: Finished Other -->
+        <div class="flex-1 min-w-[260px] max-w-[320px] bg-slate-900/15 border border-slate-900/80 rounded-2xl p-3.5 flex flex-col h-full">
           <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-900/50 shrink-0">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-450">Finished Other</h3>
             <span class="px-1.5 py-0.5 text-[10px] font-bold bg-slate-800 text-slate-400 rounded-full">{finishedOtherPipelines.length}</span>
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
-            {#if draggedPWJ && (draggedPWJ.pipeline.status === 'running' || draggedPWJ.pipeline.status === 'pending')}
-              <div class="h-20 flex flex-col items-center justify-center text-center text-slate-555 border border-dashed border-rose-500/20 rounded-xl bg-rose-500/[0.02] p-3 pointer-events-none">
-                <svg class="w-4 h-4 text-rose-550 animate-pulse mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div class="text-[9px] font-bold">Drop to Cancel Pipeline</div>
-              </div>
-            {/if}
-
             {#each finishedOtherPipelines as pwj (pwj.projectPath)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
-                draggable="true"
-                ondragstart={(e) => handleDragStart(e, pwj)}
-                ondragend={handleDragEnd}
-                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl transition"
               >
                 <div class="text-[10px] font-bold text-indigo-400 truncate">{pwj.projectPath}</div>
                 <h4 class="text-xs font-semibold text-slate-200 mt-1 truncate">{pwj.projectName}</h4>

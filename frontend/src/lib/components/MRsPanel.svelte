@@ -284,11 +284,13 @@
 
   // Drag Handlers
   function handleDragStart(e: DragEvent, mr: MergeRequest) {
-    draggedMR = mr;
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = "move";
       e.dataTransfer.setData("text/plain", mr.id.toString());
     }
+    setTimeout(() => {
+      draggedMR = mr;
+    }, 0);
   }
 
   function handleDragEnd() {
@@ -729,6 +731,7 @@
                 ondragstart={(e) => handleDragStart(e, mr)}
                 ondragend={handleDragEnd}
                 class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                class:opacity-40={draggedMR?.id === mr.id}
               >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -757,6 +760,7 @@
                 ondragstart={(e) => handleDragStart(e, mr)}
                 ondragend={handleDragEnd}
                 class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                class:opacity-40={draggedMR?.id === mr.id}
               >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -785,6 +789,7 @@
                 ondragstart={(e) => handleDragStart(e, mr)}
                 ondragend={handleDragEnd}
                 class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                class:opacity-40={draggedMR?.id === mr.id}
               >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
