@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { Window } from "@wailsio/runtime";
+  import { Window, System } from "@wailsio/runtime";
   import Sidebar from "./lib/components/Sidebar.svelte";
   import SetupPanel from "./lib/components/SetupPanel.svelte";
   import TodosPanel from "./lib/components/TodosPanel.svelte";
@@ -13,6 +13,8 @@
 
   // Reactive state using Svelte 5 Runes
   let currentTab = $state("todos");
+  let isWindows = $state(false);
+  let isMaximised = $state(false);
   let isConfigured = $state(true);
   let isLoading = $state(false);
   let pollIntervalSec = $state(30);
@@ -133,12 +135,28 @@
     isInspectorOpen = true;
   }
 
+  function updateMaximisedState() {
+    Window.IsMaximised().then((state) => {
+      isMaximised = state;
+    });
+  }
+
+  async function handleToggleMaximize() {
+    await Window.ToggleMaximise();
+    updateMaximisedState();
+  }
+
   function handleDoubleClickTitlebar() {
-    Window.ToggleMaximise();
+    handleToggleMaximize();
   }
 
   onMount(async () => {
     isLoading = true;
+    isWindows = System.IsWindows();
+    if (isWindows) {
+      window.addEventListener("resize", updateMaximisedState);
+      updateMaximisedState();
+    }
     await loadPollingSettings();
     fetchTelemetryData(true);
     startPolling();
@@ -146,6 +164,9 @@
 
   onDestroy(() => {
     stopPolling();
+    if (isWindows) {
+      window.removeEventListener("resize", updateMaximisedState);
+    }
   });
 </script>
 
@@ -169,11 +190,65 @@
     <!-- Title bar drag area (required for chromeless hidden-inset windows on macOS) -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="h-10 shrink-0 select-none cursor-default"
+      class="h-10 shrink-0 select-none cursor-default flex items-center justify-between px-4 border-b border-slate-900/10"
       style="-webkit-app-region: drag"
       role="none"
       ondblclick={handleDoubleClickTitlebar}
-    ></div>
+    >
+      <!-- Title on Windows -->
+      <div class="text-[10px] font-mono text-slate-500 font-bold uppercase tracking-wider select-none pointer-events-none">
+        {#if isWindows}
+          Gittar Control Panel
+        {/if}
+      </div>
+
+      <!-- Custom Fluent Windows Titlebar Controls -->
+      {#if isWindows}
+        <div class="flex items-center h-full -mr-4" style="-webkit-app-region: no-drag">
+          <!-- Minimize -->
+          <button
+            onclick={() => Window.Minimise()}
+            class="h-10 w-12 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors duration-150 cursor-pointer"
+            title="Minimize"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 10.2 1" fill="none" stroke="currentColor" stroke-width="1.2">
+              <line x1="0" y1="0.5" x2="10.2" y2="0.5" />
+            </svg>
+          </button>
+          
+          <!-- Maximize / Restore -->
+          <button
+            onclick={handleToggleMaximize}
+            class="h-10 w-12 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors duration-150 cursor-pointer"
+            title={isMaximised ? "Restore" : "Maximize"}
+          >
+            {#if isMaximised}
+              <!-- Restore icon (double square) -->
+              <svg class="w-3.5 h-3.5" viewBox="0 0 10.2 10.2" fill="none" stroke="currentColor" stroke-width="1.2">
+                <path d="M2.1,2.1 L2.1,0.5 L9.7,0.5 L9.7,8.1 L8.1,8.1" />
+                <rect x="0.5" y="2.1" width="7.6" height="7.6" />
+              </svg>
+            {:else}
+              <!-- Maximize icon (single square) -->
+              <svg class="w-2.5 h-2.5" viewBox="0 0 10.2 10.2" fill="none" stroke="currentColor" stroke-width="1.2">
+                <rect x="0.5" y="0.5" width="9.2" height="9.2" />
+              </svg>
+            {/if}
+          </button>
+          
+          <!-- Close -->
+          <button
+            onclick={() => Window.Close()}
+            class="h-10 w-12 flex items-center justify-center text-slate-400 hover:text-white hover:bg-rose-600 transition-colors duration-150 cursor-pointer"
+            title="Close"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2">
+              <path d="M1,1 L9,9 M9,1 L1,9" />
+            </svg>
+          </button>
+        </div>
+      {/if}
+    </div>
 
     <!-- Network Loader -->
     {#if isLoading}
