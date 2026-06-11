@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { Window, System } from "@wailsio/runtime";
+  import { Window } from "@wailsio/runtime";
   import Sidebar from "./lib/components/Sidebar.svelte";
   import SetupPanel from "./lib/components/SetupPanel.svelte";
   import TodosPanel from "./lib/components/TodosPanel.svelte";
@@ -152,7 +152,8 @@
 
   onMount(async () => {
     isLoading = true;
-    isWindows = System.IsWindows();
+    const ua = navigator.userAgent.toLowerCase();
+    isWindows = ua.includes("windows") || navigator.platform.toLowerCase().includes("win");
     if (isWindows) {
       window.addEventListener("resize", updateMaximisedState);
       updateMaximisedState();
