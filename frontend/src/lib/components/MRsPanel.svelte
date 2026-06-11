@@ -217,6 +217,24 @@
     if (diffDays === 1) return "yesterday";
     return `${diffDays}d ago`;
   }
+
+  function getBorderLeftAccent(mr: MergeRequest): string {
+    if (mr.state === "merged") return "border-l-indigo-500/40";
+    if (mr.state === "closed") return "border-l-slate-700/30";
+    if (mr.work_in_progress || mr.draft) return "border-l-slate-600/40";
+    if (mr.head_pipeline) {
+      switch (mr.head_pipeline.status?.toLowerCase()) {
+        case "success":
+          return "border-l-emerald-500/50";
+        case "failed":
+          return "border-l-rose-500/50";
+        case "running":
+        case "pending":
+          return "border-l-amber-500/50";
+      }
+    }
+    return "border-l-slate-800/60";
+  }
 </script>
 
 <div class="h-full flex flex-col">
@@ -372,7 +390,7 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             oncontextmenu={(e) => handleContextMenu(e, mr.web_url)}
-            class="group p-4 bg-slate-900/30 border border-slate-900/70 hover:border-slate-800/80 rounded-xl transition duration-150 flex items-start justify-between relative"
+            class="group p-4 bg-slate-950/20 border-t border-r border-b border-l-2 border-y-slate-900/40 border-r-slate-900/40 {getBorderLeftAccent(mr)} hover:bg-slate-900/25 hover:border-y-slate-800/60 hover:border-r-slate-800/60 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl transition-all duration-200 flex items-start justify-between relative"
           >
             <div class="min-w-0 flex-1 pr-4">
               <!-- Title, ID, State & Draft Indicator -->
@@ -473,10 +491,10 @@
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div
-                  onclick={(e) => { e.stopPropagation(); Browser.OpenURL(mr.head_pipeline.web_url); }}
-                  oncontextmenu={(e) => { e.stopPropagation(); handleContextMenu(e, mr.head_pipeline.web_url); }}
-                  class="px-2 py-1 border text-[11px] font-bold uppercase tracking-wider rounded-lg flex items-center space-x-1.5 cursor-pointer transition select-none {getPipelineStatusClasses(mr.head_pipeline.status)}"
-                  title="Head Pipeline: {mr.head_pipeline.status} (Click to open, right-click to copy)"
+                  onclick={(e) => { e.stopPropagation(); if (mr.head_pipeline?.web_url) Browser.OpenURL(mr.head_pipeline.web_url); }}
+                  oncontextmenu={(e) => { e.stopPropagation(); if (mr.head_pipeline?.web_url) handleContextMenu(e, mr.head_pipeline.web_url); }}
+                  class="px-2 py-1 border text-[11px] font-bold uppercase tracking-wider rounded-lg flex items-center space-x-1.5 cursor-pointer transition select-none {getPipelineStatusClasses(mr.head_pipeline?.status || '')}"
+                  title="Head Pipeline: {mr.head_pipeline?.status || ''} (Click to open, right-click to copy)"
                 >
                   <!-- Circular status indicator check / spinner / cross -->
                   {#if mr.head_pipeline.status === "success"}

@@ -8,7 +8,7 @@
   import MRsPanel from "./lib/components/MRsPanel.svelte";
   import InspectorPanel from "./lib/components/InspectorPanel.svelte";
 
-  import { FetchTelemetry, GetConfig } from "../bindings/gittar/internal/service/appservice";
+  import { FetchTelemetry, GetConfig, GetCachedTelemetry } from "../bindings/gittar/internal/service/appservice";
   import type { TelemetryPayload } from "../bindings/gittar/internal/gitlab/models";
 
   // Reactive state using Svelte 5 Runes
@@ -30,7 +30,7 @@
 
   // Running polling timer reference
   let pollTimer: any = null;
-  let isFetching = false;
+  let isFetching = $state(false);
 
   // Derived counts for Sidebar badges
   const todosCount = $derived(telemetry?.todos?.length || 0);
@@ -138,9 +138,25 @@
   }
 
   onMount(async () => {
-    isLoading = true;
+    // 1. Load config settings first
     await loadPollingSettings();
-    fetchTelemetryData(true);
+
+    // 2. Load cached telemetry data instantly
+    try {
+      const cachedData = await GetCachedTelemetry();
+      if (cachedData && cachedData.username) {
+        telemetry = cachedData;
+        isConfigured = true;
+      }
+    } catch (e) {
+      console.warn("[App] Failed to load cached telemetry:", e);
+    }
+
+    // 3. Sync fresh telemetry in the background.
+    // If we have cached data, we don't block the UI with the full-screen loader.
+    // If there is no cached data (e.g. cold start / first setup), show the spinner.
+    const showLoader = !telemetry;
+    fetchTelemetryData(showLoader);
     startPolling();
   });
 
@@ -160,16 +176,21 @@
     {username}
     {avatarUrl}
     syncError={errorMsg}
+    isSyncing={isFetching}
     onSelectTab={(tab) => (currentTab = tab)}
   />
 
   <!-- Main Workspace Area -->
   <main class="h-screen overflow-hidden flex flex-col bg-slate-950/45 text-slate-100 relative">
     
+    <!-- Ambient background glows for premium glassmorphism -->
+    <div class="absolute top-[-15%] left-[-10%] w-[65%] h-[65%] rounded-full bg-indigo-600/8 blur-[130px] pointer-events-none z-0"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] rounded-full bg-emerald-600/4 blur-[120px] pointer-events-none z-0"></div>
+
     <!-- Title bar drag area (required for chromeless hidden-inset windows on macOS) -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="h-10 shrink-0 select-none cursor-default"
+      class="h-10 shrink-0 select-none cursor-default relative z-20"
       style="-webkit-app-region: drag"
       role="none"
       ondblclick={handleDoubleClickTitlebar}
@@ -184,7 +205,7 @@
     {/if}
 
     <!-- Content Router -->
-    <div class="flex-1 overflow-hidden">
+    <div class="flex-1 overflow-hidden relative z-10">
 
       {#if currentTab === "todos"}
         <TodosPanel todos={telemetry?.todos || []} />

@@ -123,6 +123,15 @@
   function formatActionLabel(action: string): string {
     return action.replace(/_/g, " ");
   }
+
+  function getBorderLeftAccent(action: string): string {
+    const act = action.toLowerCase();
+    if (act.includes("assigned")) return "border-l-blue-500/40";
+    if (act.includes("mention")) return "border-l-purple-500/40";
+    if (act.includes("build") || act.includes("fail")) return "border-l-rose-500/40";
+    if (act.includes("approval") || act.includes("review")) return "border-l-amber-500/40";
+    return "border-l-slate-800/60";
+  }
 </script>
 
 <div class="h-full flex flex-col">
@@ -247,7 +256,7 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             oncontextmenu={(e) => handleContextMenu(e, todo.target_url)}
-            class="group flex items-start justify-between p-3.5 bg-slate-900/30 border border-slate-900/70 hover:border-slate-800/80 rounded-xl transition duration-150 relative"
+            class="group flex items-start justify-between p-3.5 bg-slate-950/20 border-t border-r border-b border-l-2 border-y-slate-900/40 border-r-slate-900/40 {getBorderLeftAccent(todo.action_name)} hover:bg-slate-900/25 hover:border-y-slate-800/60 hover:border-r-slate-800/60 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl transition-all duration-200 relative"
           >
             <div class="flex items-start space-x-3.5 min-w-0 pr-4">
               <!-- Author Avatar -->
