@@ -94,7 +94,7 @@ func (c *Client) doRequest(apiPath string) ([]byte, bool, error) {
 	if err != nil {
 		return nil, false, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusNotModified {
 		if cached {
@@ -391,7 +391,7 @@ func (c *Client) doWriteRequest(method, apiPath string, body interface{}) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(resp.Body)

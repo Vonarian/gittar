@@ -16,6 +16,10 @@ Gittar is a high-performance visual control panel and menu bar anchor for GitLab
   ```bash
   go test -v ./...
   ```
+- **Go Linting:** Ensure all Go source files adhere to code quality standards with no warnings or errors. Running the following command is crucial for quality assurance before making any commits:
+  ```bash
+  golangci-lint-v2 run ./...
+  ```
 - **Frontend Type Safety:** Ensure TypeScript and Svelte components compile cleanly without errors. Validate using:
   ```bash
   npm run check
