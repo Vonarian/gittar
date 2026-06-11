@@ -54,7 +54,10 @@
         <h1 class="text-sm font-semibold text-slate-100 truncate">Gittar</h1>
         {#if isSyncing}
           <p class="text-[10px] text-indigo-400 font-semibold truncate flex items-center">
-            <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-1.5 shrink-0 animate-ping"></span>
+            <span class="relative flex h-1.5 w-1.5 mr-2 shrink-0">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400/80 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+            </span>
             Syncing...
           </p>
         {:else if syncError}
