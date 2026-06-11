@@ -154,6 +154,7 @@
     isLoading = true;
     const ua = navigator.userAgent.toLowerCase();
     isWindows = ua.includes("windows") || navigator.platform.toLowerCase().includes("win");
+    console.log("[App] isWindows:", isWindows, "ua:", navigator.userAgent, "platform:", navigator.platform);
     if (isWindows) {
       window.addEventListener("resize", updateMaximisedState);
       updateMaximisedState();
