@@ -10,6 +10,7 @@
     username: string;
     avatarUrl: string;
     syncError: string;
+    isSyncing?: boolean;
     onSelectTab: (tab: string) => void;
   }
 
@@ -22,6 +23,7 @@
     username,
     avatarUrl,
     syncError,
+    isSyncing = false,
     onSelectTab,
   }: Props = $props();
 
@@ -30,14 +32,14 @@
   }
 </script>
 
-<div class="h-screen w-[240px] bg-slate-950/80 border-r border-slate-900/60 flex flex-col justify-between select-none">
+<div class="h-screen w-[240px] bg-slate-950/85 border-r border-slate-900/50 flex flex-col justify-between select-none backdrop-blur-md">
   <!-- Profile & Header -->
   <div>
     <!-- Drag area spacer for macOS traffic lights -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="h-10 shrink-0 select-none cursor-default"
-      style="-webkit-app-region: drag"
+      style="-webkit-app-region: drag; --wails-draggable: drag;"
       role="none"
       ondblclick={handleDoubleClickTitlebar}
     ></div>
@@ -50,9 +52,14 @@
       {/if}
       <div class="min-w-0 flex-1">
         <h1 class="text-sm font-semibold text-slate-100 truncate">Gittar</h1>
-        {#if syncError}
+        {#if isSyncing}
+          <p class="text-[10px] text-indigo-400 font-semibold truncate flex items-center">
+            <span class="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-1.5 shrink-0 animate-ping"></span>
+            Syncing...
+          </p>
+        {:else if syncError}
           <p class="text-[10px] text-amber-500 font-semibold truncate flex items-center" title={syncError}>
-            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1 shrink-0 animate-pulse"></span>
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5 shrink-0 animate-pulse"></span>
             Offline (cached)
           </p>
         {:else}
@@ -76,7 +83,7 @@
       <!-- Todos -->
       <button
         onclick={() => onSelectTab("todos")}
-        class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors {currentTab === 'todos' ? 'bg-slate-900 text-white font-medium' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'}"
+        class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'todos' ? 'bg-indigo-600/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
       >
         <div class="flex items-center space-x-2.5">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +92,7 @@
           <span>Inbox Feed</span>
         </div>
         {#if todosCount > 0}
-          <span class="px-2 py-0.5 text-xs font-semibold bg-indigo-500/10 text-indigo-400 rounded-full border border-indigo-500/20">
+          <span class="px-2 py-0.5 text-xs font-semibold bg-indigo-500/15 text-indigo-400 rounded-full border border-indigo-500/25">
             {todosCount}
           </span>
         {/if}
@@ -94,7 +101,7 @@
       <!-- Pipelines -->
       <button
         onclick={() => onSelectTab("pipelines")}
-        class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors {currentTab === 'pipelines' ? 'bg-slate-900 text-white font-medium' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'}"
+        class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'pipelines' ? 'bg-indigo-600/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
       >
         <div class="flex items-center space-x-2.5">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,7 +124,7 @@
       <!-- MRs -->
       <button
         onclick={() => onSelectTab("mrs")}
-        class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors {currentTab === 'mrs' ? 'bg-slate-900 text-white font-medium' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200'}"
+        class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'mrs' ? 'bg-indigo-600/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
       >
         <div class="flex items-center space-x-2.5">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,7 +145,7 @@
   <div class="p-3 border-t border-slate-900/60 bg-slate-950/40">
     <button
       onclick={() => onSelectTab("setup")}
-      class="w-full flex items-center space-x-2.5 px-3 py-2 text-sm text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 rounded-lg transition-colors {currentTab === 'setup' ? 'bg-slate-900 text-white font-medium' : ''}"
+      class="w-full flex items-center space-x-2.5 px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'setup' ? 'bg-indigo-600/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />

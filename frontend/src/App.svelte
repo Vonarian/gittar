@@ -8,11 +8,13 @@
   import MRsPanel from "./lib/components/MRsPanel.svelte";
   import InspectorPanel from "./lib/components/InspectorPanel.svelte";
 
-  import { FetchTelemetry, GetConfig } from "../bindings/gittar/internal/service/appservice";
+  import { FetchTelemetry, GetConfig, GetCachedTelemetry } from "../bindings/gittar/internal/service/appservice";
   import type { TelemetryPayload } from "../bindings/gittar/internal/gitlab/models";
 
   // Reactive state using Svelte 5 Runes
   let currentTab = $state("todos");
+  let isWindows = $state(false);
+  let isMaximised = $state(false);
   let isConfigured = $state(true);
   let isLoading = $state(false);
   let pollIntervalSec = $state(30);
@@ -30,7 +32,7 @@
 
   // Running polling timer reference
   let pollTimer: any = null;
-  let isFetching = false;
+  let isFetching = $state(false);
 
   // Derived counts for Sidebar badges
   const todosCount = $derived(telemetry?.todos?.length || 0);
@@ -133,19 +135,59 @@
     isInspectorOpen = true;
   }
 
+  async function updateMaximisedState() {
+    try {
+      isMaximised = await Window.IsMaximised();
+    } catch (err) {
+      console.warn("Failed to fetch maximised state:", err);
+    }
+  }
+
+  async function handleToggleMaximize() {
+    await Window.ToggleMaximise();
+    await updateMaximisedState();
+  }
+
   function handleDoubleClickTitlebar() {
-    Window.ToggleMaximise();
+    handleToggleMaximize();
   }
 
   onMount(async () => {
-    isLoading = true;
+    const ua = navigator.userAgent.toLowerCase();
+    isWindows = ua.includes("windows") || navigator.platform.toLowerCase().includes("win");
+    console.log("[App] isWindows:", isWindows, "ua:", navigator.userAgent, "platform:", navigator.platform);
+    if (isWindows) {
+      window.addEventListener("resize", updateMaximisedState);
+      updateMaximisedState();
+    }
+
+    // 1. Load config settings first
     await loadPollingSettings();
-    fetchTelemetryData(true);
+
+    // 2. Load cached telemetry data instantly
+    try {
+      const cachedData = await GetCachedTelemetry();
+      if (cachedData && cachedData.username) {
+        telemetry = cachedData;
+        isConfigured = true;
+      }
+    } catch (e) {
+      console.warn("[App] Failed to load cached telemetry:", e);
+    }
+
+    // 3. Sync fresh telemetry in the background.
+    // If we have cached data, we don't block the UI with the full-screen loader.
+    // If there is no cached data (e.g. cold start / first setup), show the spinner.
+    const showLoader = !telemetry;
+    fetchTelemetryData(showLoader);
     startPolling();
   });
 
   onDestroy(() => {
     stopPolling();
+    if (isWindows) {
+      window.removeEventListener("resize", updateMaximisedState);
+    }
   });
 </script>
 
@@ -160,20 +202,85 @@
     {username}
     {avatarUrl}
     syncError={errorMsg}
+    isSyncing={isFetching}
     onSelectTab={(tab) => (currentTab = tab)}
   />
 
   <!-- Main Workspace Area -->
   <main class="h-screen overflow-hidden flex flex-col bg-slate-950/45 text-slate-100 relative">
     
+    <!-- Ambient background glows for premium glassmorphism -->
+    <div class="absolute top-[-15%] left-[-10%] w-[65%] h-[65%] rounded-full bg-indigo-600/8 blur-[130px] pointer-events-none z-0"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[55%] h-[55%] rounded-full bg-emerald-600/4 blur-[120px] pointer-events-none z-0"></div>
+
     <!-- Title bar drag area (required for chromeless hidden-inset windows on macOS) -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
-      class="h-10 shrink-0 select-none cursor-default"
-      style="-webkit-app-region: drag"
+      class="h-10 shrink-0 select-none cursor-default flex items-center justify-between px-4 border-b border-slate-900/10 relative z-20"
+      style="-webkit-app-region: drag; --wails-draggable: drag;"
       role="none"
       ondblclick={handleDoubleClickTitlebar}
-    ></div>
+    >
+      <!-- Title on Windows -->
+      <div class="text-[10px] font-mono text-slate-500 font-bold uppercase tracking-wider select-none pointer-events-none">
+        {#if isWindows}
+          Gittar Control Panel
+        {/if}
+      </div>
+
+      <!-- Custom Fluent Windows Titlebar Controls -->
+      {#if isWindows}
+        <div class="flex items-center h-full -mr-4" style="-webkit-app-region: no-drag; --wails-draggable: no-drag;">
+          <!-- Minimize -->
+          <button
+            type="button"
+            aria-label="Minimize"
+            onclick={() => Window.Minimise()}
+            class="h-10 w-12 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors duration-150 cursor-pointer"
+            title="Minimize"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 10.2 1" fill="none" stroke="currentColor" stroke-width="1.2">
+              <line x1="0" y1="0.5" x2="10.2" y2="0.5" />
+            </svg>
+          </button>
+          
+          <!-- Maximize / Restore -->
+          <button
+            type="button"
+            aria-label={isMaximised ? "Restore" : "Maximize"}
+            onclick={handleToggleMaximize}
+            class="h-10 w-12 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-white/10 transition-colors duration-150 cursor-pointer"
+            title={isMaximised ? "Restore" : "Maximize"}
+          >
+            {#if isMaximised}
+              <!-- Restore icon (double square) -->
+              <svg class="w-3.5 h-3.5" viewBox="0 0 10.2 10.2" fill="none" stroke="currentColor" stroke-width="1.2">
+                <path d="M2.1,2.1 L2.1,0.5 L9.7,0.5 L9.7,8.1 L8.1,8.1" />
+                <rect x="0.5" y="2.1" width="7.6" height="7.6" />
+              </svg>
+            {:else}
+              <!-- Maximize icon (single square) -->
+              <svg class="w-2.5 h-2.5" viewBox="0 0 10.2 10.2" fill="none" stroke="currentColor" stroke-width="1.2">
+                <rect x="0.5" y="0.5" width="9.2" height="9.2" />
+              </svg>
+            {/if}
+          </button>
+          
+          <!-- Close -->
+          <button
+            type="button"
+            aria-label="Close"
+            onclick={() => Window.Close()}
+            class="h-10 w-12 flex items-center justify-center text-slate-400 hover:text-white hover:bg-rose-600 transition-colors duration-150 cursor-pointer"
+            title="Close"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2">
+              <path d="M1,1 L9,9 M9,1 L1,9" />
+            </svg>
+          </button>
+        </div>
+      {/if}
+    </div>
 
     <!-- Network Loader -->
     {#if isLoading}
@@ -184,7 +291,7 @@
     {/if}
 
     <!-- Content Router -->
-    <div class="flex-1 overflow-hidden">
+    <div class="flex-1 overflow-hidden relative z-10">
 
       {#if currentTab === "todos"}
         <TodosPanel todos={telemetry?.todos || []} />

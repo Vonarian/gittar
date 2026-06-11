@@ -81,7 +81,7 @@
   display: grid;
   grid-template-columns: 240px 1fr;
   overflow: hidden;
-  background-color: rgba(13, 17, 23, 0.85); /* fallback dark tint */
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background-color: rgba(8, 10, 15, 0.62); /* fallback dark translucent tint */
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
 }

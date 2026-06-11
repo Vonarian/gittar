@@ -139,6 +139,23 @@
     }
     return groups;
   }
+
+  function getBorderLeftAccent(status: string): string {
+    switch (status?.toLowerCase()) {
+      case "success":
+        return "border-l-emerald-500/50";
+      case "failed":
+        return "border-l-rose-500/50";
+      case "running":
+      case "pending":
+        return "border-l-amber-500/50";
+      case "canceled":
+      case "skipped":
+        return "border-l-slate-700/40";
+      default:
+        return "border-l-slate-800/60";
+    }
+  }
 </script>
 
 <div class="h-full flex flex-col">
@@ -243,7 +260,7 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           oncontextmenu={(e) => { if (pwj.pipeline && pwj.pipeline.id > 0) handleContextMenu(e, pwj.pipeline.web_url); }}
-          class="bg-slate-900/20 border border-slate-900/80 rounded-xl p-5 hover:border-slate-800/60 transition duration-150"
+          class="bg-slate-950/20 border-t border-r border-b border-l-2 border-y-slate-900/40 border-r-slate-900/40 {getBorderLeftAccent(pwj.pipeline?.status || '')} rounded-xl p-5 hover:bg-slate-900/25 hover:border-y-slate-800/60 hover:border-r-slate-800/60 hover:shadow-md hover:shadow-indigo-500/5 transition-all duration-200"
         >
           
           <!-- Project Info & Pipeline Header -->
