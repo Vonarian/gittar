@@ -39,7 +39,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="h-10 shrink-0 select-none cursor-default"
-      style="-webkit-app-region: drag"
+      style="-webkit-app-region: drag; --wails-draggable: drag;"
       role="none"
       ondblclick={handleDoubleClickTitlebar}
     ></div>

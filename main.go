@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"runtime"
 
 	"gittar/internal/service"
 	"gittar/internal/tray"
@@ -36,19 +37,31 @@ func main() {
 		},
 	})
 
-	// 3. Configure the main window (Mac borderless inset vibrancy)
-	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
+	// 3. Configure the main window (Dynamic cross-platform options)
+	windowOptions := application.WebviewWindowOptions{
 		Title:  "Gittar",
 		Width:  1200,
 		Height: 800,
-		Mac: application.MacWindow{
+		BackgroundColour: application.NewRGBA(13, 17, 23, 150), // Transparent dark tint for vibrant Acrylic blur
+		URL:              "/",
+	}
+
+	if runtime.GOOS == "darwin" {
+		windowOptions.Mac = application.MacWindow{
 			InvisibleTitleBarHeight: 40,
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
-		},
-		BackgroundColour: application.NewRGBA(13, 17, 23, 210), // Translucent dark
-		URL:              "/",
-	})
+		}
+	} else if runtime.GOOS == "windows" {
+		windowOptions.Frameless = true
+		windowOptions.Windows = application.WindowsWindow{
+			BackdropType:                      application.Acrylic, // Sexy Windows Acrylic blur
+			Theme:                             application.Dark,
+			DisableFramelessWindowDecorations: false, // Maintain rounded corners & drop shadow on Windows 11
+		}
+	}
+
+	win := app.Window.NewWithOptions(windowOptions)
 
 	// 4. Initialize system tray service
 	ts := tray.NewTrayService(app, win, notifier)
