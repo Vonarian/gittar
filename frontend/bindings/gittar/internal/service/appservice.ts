@@ -37,6 +37,15 @@ export function FetchTelemetry(): $CancellablePromise<gitlab$0.TelemetryPayload 
 }
 
 /**
+ * GetCachedTelemetry reads the cached GitLab telemetry payload from disk.
+ */
+export function GetCachedTelemetry(): $CancellablePromise<gitlab$0.TelemetryPayload | null> {
+    return $Call.ByID(3892731397).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
  * GetConfig reads the user config.
  */
 export function GetConfig(): $CancellablePromise<config$0.Config | null> {

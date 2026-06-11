@@ -1,7 +1,10 @@
 package service
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 
@@ -32,6 +35,32 @@ func NewAppService() *AppService {
 		isFirstFetch:   true,
 	}
 }
+
+// GetCachedTelemetry reads the cached GitLab telemetry payload from disk.
+func (s *AppService) GetCachedTelemetry() (*gitlab.TelemetryPayload, error) {
+	dir, err := config.GetConfigDir()
+	if err != nil {
+		return nil, err
+	}
+
+	filePath := filepath.Join(dir, "cache.json")
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var payload gitlab.TelemetryPayload
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, err
+	}
+
+	return &payload, nil
+}
+
 
 // getGitLabClient retrieves the cached GitLab client or creates one if the config changed.
 func (s *AppService) getGitLabClient(conf *config.Config) *gitlab.Client {
@@ -296,13 +325,32 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	}
 	s.stateMu.Unlock()
 
-	return &gitlab.TelemetryPayload{
+	payload := &gitlab.TelemetryPayload{
 		Todos:         todos,
 		Pipelines:     pipelines,
 		MergeRequests: mrs,
 		Username:      user.Username,
 		AvatarURL:     user.AvatarURL,
-	}, nil
+	}
+
+	// Save successfully fetched telemetry payload to disk cache asynchronously
+	go func(p *gitlab.TelemetryPayload) {
+		dir, err := config.GetConfigDir()
+		if err != nil {
+			return
+		}
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return
+		}
+		filePath := filepath.Join(dir, "cache.json")
+		data, err := json.Marshal(p)
+		if err != nil {
+			return
+		}
+		_ = os.WriteFile(filePath, data, 0600)
+	}(payload)
+
+	return payload, nil
 }
 
 // MergeMergeRequest accepts/merges the GitLab MR.
