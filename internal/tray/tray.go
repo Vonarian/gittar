@@ -1,10 +1,16 @@
 package tray
 
 import (
+	_ "embed"
 	"fmt"
+	"runtime"
+
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
+
+//go:embed tray_icon.png
+var trayIcon []byte
 
 // TrayService manages the system tray icon, labels, window visibility, and desktop notifications.
 type TrayService struct {
@@ -27,6 +33,9 @@ func NewTrayService(app *application.App, window application.Window, notifier *n
 
 func (ts *TrayService) init() {
 	ts.systray = ts.app.SystemTray.New()
+	if runtime.GOOS == "windows" {
+		ts.systray.SetIcon(trayIcon)
+	}
 	ts.systray.SetLabel("Gittar")
 	ts.systray.SetTooltip("GitLab Enterprise Control Panel")
 

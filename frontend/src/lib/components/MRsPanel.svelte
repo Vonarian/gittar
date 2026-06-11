@@ -473,10 +473,10 @@
                 <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div
-                  onclick={(e) => { e.stopPropagation(); Browser.OpenURL(mr.head_pipeline.web_url); }}
-                  oncontextmenu={(e) => { e.stopPropagation(); handleContextMenu(e, mr.head_pipeline.web_url); }}
-                  class="px-2 py-1 border text-[11px] font-bold uppercase tracking-wider rounded-lg flex items-center space-x-1.5 cursor-pointer transition select-none {getPipelineStatusClasses(mr.head_pipeline.status)}"
-                  title="Head Pipeline: {mr.head_pipeline.status} (Click to open, right-click to copy)"
+                  onclick={(e) => { e.stopPropagation(); if (mr.head_pipeline?.web_url) Browser.OpenURL(mr.head_pipeline.web_url); }}
+                  oncontextmenu={(e) => { e.stopPropagation(); if (mr.head_pipeline?.web_url) handleContextMenu(e, mr.head_pipeline.web_url); }}
+                  class="px-2 py-1 border text-[11px] font-bold uppercase tracking-wider rounded-lg flex items-center space-x-1.5 cursor-pointer transition select-none {getPipelineStatusClasses(mr.head_pipeline?.status || '')}"
+                  title="Head Pipeline: {mr.head_pipeline?.status || ''} (Click to open, right-click to copy)"
                 >
                   <!-- Circular status indicator check / spinner / cross -->
                   {#if mr.head_pipeline.status === "success"}
