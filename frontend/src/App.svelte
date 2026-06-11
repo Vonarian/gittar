@@ -8,7 +8,7 @@
   import MRsPanel from "./lib/components/MRsPanel.svelte";
   import InspectorPanel from "./lib/components/InspectorPanel.svelte";
 
-  import { FetchTelemetry, GetConfig, GetCachedTelemetry } from "../bindings/gittar/internal/service/appservice";
+  import { FetchTelemetry, GetConfig, SaveConfig, GetCachedTelemetry } from "../bindings/gittar/internal/service/appservice";
   import type { TelemetryPayload } from "../bindings/gittar/internal/gitlab/models";
 
   // Reactive state using Svelte 5 Runes
@@ -18,6 +18,7 @@
   let isConfigured = $state(true);
   let isLoading = $state(false);
   let pollIntervalSec = $state(30);
+  let ignoreFailedPipelines = $state(false);
   let errorMsg = $state("");
   let consecutiveFailures = $state(0);
 
@@ -39,7 +40,9 @@
   const mrsCount = $derived(telemetry?.mergeRequests?.length || 0);
   
   const failedPipelines = $derived(
-    (telemetry?.pipelines || []).filter((p) => p.pipeline?.status === "failed").length
+    ignoreFailedPipelines
+      ? 0
+      : (telemetry?.pipelines || []).filter((p) => p.pipeline?.status === "failed").length
   );
   
   const runningPipelines = $derived(
@@ -56,6 +59,7 @@
       const cfg = await GetConfig();
       if (cfg) {
         pollIntervalSec = cfg.pollIntervalSec || 30;
+        ignoreFailedPipelines = cfg.ignoreFailedPipelines || false;
       }
     } catch (e) {
       console.error("Failed to load config for polling:", e);
@@ -126,6 +130,20 @@
       currentTab = "todos"; // Auto switch to main view
     }
     startPolling(); // Restart poll with new duration
+  }
+
+  async function toggleIgnoreFailedPipelines() {
+    try {
+      const cfg = await GetConfig();
+      if (cfg) {
+        cfg.ignoreFailedPipelines = !cfg.ignoreFailedPipelines;
+        await SaveConfig(cfg);
+        ignoreFailedPipelines = cfg.ignoreFailedPipelines;
+        await fetchTelemetryData(true);
+      }
+    } catch (e) {
+      console.error("Failed to toggle ignore failed pipelines:", e);
+    }
   }
 
   function handleSelectJobLog(projectPath: string, jobId: number, jobName: string) {
@@ -294,11 +312,17 @@
     <div class="flex-1 overflow-hidden relative z-10">
 
       {#if currentTab === "todos"}
-        <TodosPanel todos={telemetry?.todos || []} />
+        <TodosPanel 
+          todos={telemetry?.todos || []} 
+          onRefresh={() => fetchTelemetryData(true)}
+        />
       {:else if currentTab === "pipelines"}
         <PipelinesPanel
           pipelines={telemetry?.pipelines || []}
           onSelectJobLog={handleSelectJobLog}
+          onRefresh={() => fetchTelemetryData(true)}
+          {ignoreFailedPipelines}
+          onToggleIgnoreFailed={toggleIgnoreFailedPipelines}
         />
       {:else if currentTab === "mrs"}
         <MRsPanel

@@ -27,6 +27,7 @@ type Config struct {
 	MonitoredProjects []string             `json:"monitoredProjects"`
 	PollIntervalSec   int                  `json:"pollIntervalSec"`
 	Notifications     NotificationSettings `json:"notifications"`
+	IgnoreFailedPipelines bool                 `json:"ignoreFailedPipelines"`
 }
 
 // GetConfigDir returns the standard config directory for Gittar (~/.config/gittar).

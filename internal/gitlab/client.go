@@ -415,3 +415,26 @@ func (c *Client) CloseMergeRequest(projectID int, mrIID int) error {
 	_, err := c.doWriteRequest("PUT", path, body)
 	return err
 }
+
+// MarkTodoAsDone marks a pending todo as done.
+func (c *Client) MarkTodoAsDone(todoID int) error {
+	path := fmt.Sprintf("todos/%d/mark_as_done", todoID)
+	_, err := c.doWriteRequest("POST", path, nil)
+	return err
+}
+
+// RetryPipeline retries a failed pipeline.
+func (c *Client) RetryPipeline(projectPath string, pipelineID int) error {
+	escapedPath := url.PathEscape(projectPath)
+	path := fmt.Sprintf("projects/%s/pipelines/%d/retry", escapedPath, pipelineID)
+	_, err := c.doWriteRequest("POST", path, nil)
+	return err
+}
+
+// CancelPipeline cancels a running pipeline.
+func (c *Client) CancelPipeline(projectPath string, pipelineID int) error {
+	escapedPath := url.PathEscape(projectPath)
+	path := fmt.Sprintf("projects/%s/pipelines/%d/cancel", escapedPath, pipelineID)
+	_, err := c.doWriteRequest("POST", path, nil)
+	return err
+}
