@@ -22,7 +22,7 @@ func TestMarkTodoAsDone(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"id": 123, "state": "done"}`))
+		_, _ = w.Write([]byte(`{"id": 123, "state": "done"}`))
 	}))
 	defer server.Close()
 
@@ -45,7 +45,7 @@ func TestRetryPipeline(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"id": 456, "status": "pending"}`))
+		_, _ = w.Write([]byte(`{"id": 456, "status": "pending"}`))
 	}))
 	defer server.Close()
 
@@ -68,7 +68,7 @@ func TestCancelPipeline(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(`{"id": 789, "status": "canceled"}`))
+		_, _ = w.Write([]byte(`{"id": 789, "status": "canceled"}`))
 	}))
 	defer server.Close()
 

@@ -22,7 +22,7 @@ func main() {
 	notifier := notifications.New()
 
 	// 2. Create the Wails application
-	app := application.New(application.Options{
+	opts := application.Options{
 		Name:        "Gittar",
 		Description: "GitLab Enterprise Control Panel",
 		Services: []application.Service{
@@ -35,7 +35,8 @@ func main() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
-	})
+	}
+	app := application.New(opts)
 
 	// 3. Configure the main window (Dynamic cross-platform options)
 	windowOptions := application.WebviewWindowOptions{
@@ -46,13 +47,14 @@ func main() {
 		URL:              "/",
 	}
 
-	if runtime.GOOS == "darwin" {
+	switch runtime.GOOS {
+	case "darwin":
 		windowOptions.Mac = application.MacWindow{
 			InvisibleTitleBarHeight: 40,
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 		}
-	} else if runtime.GOOS == "windows" {
+	case "windows":
 		windowOptions.Frameless = true
 		windowOptions.Windows = application.WindowsWindow{
 			BackdropType:                      application.Acrylic, // Sexy Windows Acrylic blur
