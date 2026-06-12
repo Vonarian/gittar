@@ -2,14 +2,18 @@ package gitlab
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/proxy"
 )
 
 type cacheEntry struct {
@@ -28,8 +32,17 @@ type Client struct {
 	limiter    <-chan time.Time
 }
 
+// ProxyConfig holds SOCKS5 proxy configuration.
+type ProxyConfig struct {
+	Enabled  bool
+	Host     string
+	Port     int
+	User     string
+	Password string
+}
+
 // NewClient initializes a new GitLab API client.
-func NewClient(baseURL, token string) *Client {
+func NewClient(baseURL, token string, proxyConf *ProxyConfig) *Client {
 	if baseURL == "" {
 		baseURL = "https://gitlab.com"
 	}
@@ -43,6 +56,25 @@ func NewClient(baseURL, token string) *Client {
 		MaxIdleConnsPerHost: 5,
 		MaxConnsPerHost:     5, // Limit concurrent connections to 5 to prevent server-side block/drop
 		IdleConnTimeout:     90 * time.Second,
+	}
+
+	if proxyConf != nil && proxyConf.Enabled && proxyConf.Host != "" && proxyConf.Port > 0 {
+		var auth *proxy.Auth
+		if proxyConf.User != "" || proxyConf.Password != "" {
+			auth = &proxy.Auth{
+				User:     proxyConf.User,
+				Password: proxyConf.Password,
+			}
+		}
+		addr := fmt.Sprintf("%s:%d", proxyConf.Host, proxyConf.Port)
+		dialer, err := proxy.SOCKS5("tcp", addr, auth, proxy.Direct)
+		if err != nil {
+			fmt.Printf("[Go Backend] Failed to configure SOCKS5 proxy: %v\n", err)
+		} else {
+			transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+				return dialer.Dial(network, addr)
+			}
+		}
 	}
 
 	return &Client{

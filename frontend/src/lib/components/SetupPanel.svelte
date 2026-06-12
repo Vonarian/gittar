@@ -14,6 +14,11 @@
   let monitoredProjectsRaw = $state("");
   let monitoredGroupsRaw = $state("");
   let pollIntervalSec = $state(30);
+  let proxyEnabled = $state(false);
+  let proxyHost = $state("");
+  let proxyPort = $state(1080);
+  let proxyUser = $state("");
+  let proxyPassword = $state("");
 
   // Notifications fine-tuned preferences
   let notifEnabled = $state(true);
@@ -41,6 +46,11 @@
         monitoredProjectsRaw = (cfg.monitoredProjects || []).join("\n");
         monitoredGroupsRaw = (cfg.monitoredGroups || []).join("\n");
         pollIntervalSec = cfg.pollIntervalSec || 30;
+        proxyEnabled = cfg.proxyEnabled ?? false;
+        proxyHost = cfg.proxyHost || "";
+        proxyPort = cfg.proxyPort || 1080;
+        proxyUser = cfg.proxyUser || "";
+        proxyPassword = cfg.proxyPassword || "";
 
         if (cfg.notifications) {
           notifEnabled = cfg.notifications.enabled ?? true;
@@ -87,6 +97,11 @@
         monitoredProjects: parseTextarea(monitoredProjectsRaw),
         monitoredGroups: parseTextarea(monitoredGroupsRaw),
         pollIntervalSec: pollIntervalSec,
+        proxyEnabled: proxyEnabled,
+        proxyHost: proxyHost.trim(),
+        proxyPort: proxyPort,
+        proxyUser: proxyUser.trim(),
+        proxyPassword: proxyPassword,
         notifications: {
           enabled: notifEnabled,
           pipelineSuccess: notifPipelineSuccess,
@@ -124,6 +139,11 @@
         monitoredProjects: parseTextarea(monitoredProjectsRaw),
         monitoredGroups: parseTextarea(monitoredGroupsRaw),
         pollIntervalSec: pollIntervalSec,
+        proxyEnabled: proxyEnabled,
+        proxyHost: proxyHost.trim(),
+        proxyPort: proxyPort,
+        proxyUser: proxyUser.trim(),
+        proxyPassword: proxyPassword,
         notifications: {
           enabled: notifEnabled,
           pipelineSuccess: notifPipelineSuccess,
@@ -228,6 +248,78 @@
         bind:value={pollIntervalSec}
         class="w-32 px-3 py-2 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none transition"
       />
+    </div>
+
+    <!-- SOCKS5 Proxy Settings -->
+    <div class="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-white">SOCKS5 Proxy</h3>
+          <p class="text-slate-500 text-xs mt-0.5">Route connection to GitLab server through a SOCKS5 proxy.</p>
+        </div>
+        <label class="relative inline-flex items-center cursor-pointer select-none">
+          <input type="checkbox" bind:checked={proxyEnabled} class="sr-only peer" />
+          <div class="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-white"></div>
+        </label>
+      </div>
+
+      {#if proxyEnabled}
+        <div class="border-t border-slate-900 pt-3 space-y-4">
+          <div class="grid grid-cols-3 gap-4">
+            <!-- Proxy Host -->
+            <div class="col-span-2">
+              <label for="proxy-host" class="block text-xs font-medium text-slate-400 mb-1">Proxy Host</label>
+              <input
+                id="proxy-host"
+                type="text"
+                bind:value={proxyHost}
+                placeholder="127.0.0.1 or proxy.local"
+                class="w-full px-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition"
+              />
+            </div>
+
+            <!-- Proxy Port -->
+            <div>
+              <label for="proxy-port" class="block text-xs font-medium text-slate-400 mb-1">Proxy Port</label>
+              <input
+                id="proxy-port"
+                type="number"
+                min="1"
+                max="65535"
+                bind:value={proxyPort}
+                placeholder="1080"
+                class="w-full px-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <!-- Proxy User -->
+            <div>
+              <label for="proxy-user" class="block text-xs font-medium text-slate-400 mb-1">Username (Optional)</label>
+              <input
+                id="proxy-user"
+                type="text"
+                bind:value={proxyUser}
+                placeholder="username"
+                class="w-full px-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition"
+              />
+            </div>
+
+            <!-- Proxy Password -->
+            <div>
+              <label for="proxy-password" class="block text-xs font-medium text-slate-400 mb-1">Password (Optional)</label>
+              <input
+                id="proxy-password"
+                type="password"
+                bind:value={proxyPassword}
+                placeholder="password"
+                class="w-full px-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition"
+              />
+            </div>
+          </div>
+        </div>
+      {/if}
     </div>
 
     <!-- Fine-Tuned Notifications Settings -->

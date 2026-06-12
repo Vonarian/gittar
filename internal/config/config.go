@@ -28,6 +28,11 @@ type Config struct {
 	PollIntervalSec   int                  `json:"pollIntervalSec"`
 	Notifications     NotificationSettings `json:"notifications"`
 	IgnoreFailedPipelines bool                 `json:"ignoreFailedPipelines"`
+	ProxyEnabled      bool                 `json:"proxyEnabled"`
+	ProxyHost         string               `json:"proxyHost"`
+	ProxyPort         int                  `json:"proxyPort"`
+	ProxyUser         string               `json:"proxyUser"`
+	ProxyPassword     string               `json:"proxyPassword"`
 }
 
 // GetConfigDir returns the standard config directory for Gittar (~/.config/gittar).

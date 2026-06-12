@@ -24,6 +24,11 @@ type AppService struct {
 	seenMRIDs      map[int]bool
 	isFirstFetch   bool
 	stateMu        sync.Mutex
+	proxyEnabled   bool
+	proxyHost      string
+	proxyPort      int
+	proxyUser      string
+	proxyPassword  string
 }
 
 // NewAppService creates a new application service instance.
@@ -67,10 +72,31 @@ func (s *AppService) getGitLabClient(conf *config.Config) *gitlab.Client {
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 
-	if s.gitlabClient == nil || s.gitlabURL != conf.GitLabURL || s.gitlabToken != conf.Token {
-		s.gitlabClient = gitlab.NewClient(conf.GitLabURL, conf.Token)
+	if s.gitlabClient == nil ||
+		s.gitlabURL != conf.GitLabURL ||
+		s.gitlabToken != conf.Token ||
+		s.proxyEnabled != conf.ProxyEnabled ||
+		s.proxyHost != conf.ProxyHost ||
+		s.proxyPort != conf.ProxyPort ||
+		s.proxyUser != conf.ProxyUser ||
+		s.proxyPassword != conf.ProxyPassword {
+
+		proxyConf := &gitlab.ProxyConfig{
+			Enabled:  conf.ProxyEnabled,
+			Host:     conf.ProxyHost,
+			Port:     conf.ProxyPort,
+			User:     conf.ProxyUser,
+			Password: conf.ProxyPassword,
+		}
+
+		s.gitlabClient = gitlab.NewClient(conf.GitLabURL, conf.Token, proxyConf)
 		s.gitlabURL = conf.GitLabURL
 		s.gitlabToken = conf.Token
+		s.proxyEnabled = conf.ProxyEnabled
+		s.proxyHost = conf.ProxyHost
+		s.proxyPort = conf.ProxyPort
+		s.proxyUser = conf.ProxyUser
+		s.proxyPassword = conf.ProxyPassword
 	}
 	return s.gitlabClient
 }
