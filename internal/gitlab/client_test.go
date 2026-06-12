@@ -26,7 +26,7 @@ func TestMarkTodoAsDone(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-token")
+	client := NewClient(server.URL, "test-token", nil)
 	err := client.MarkTodoAsDone(123)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -49,7 +49,7 @@ func TestRetryPipeline(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-token")
+	client := NewClient(server.URL, "test-token", nil)
 	err := client.RetryPipeline("group/project-name", 456)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -72,9 +72,35 @@ func TestCancelPipeline(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient(server.URL, "test-token")
+	client := NewClient(server.URL, "test-token", nil)
 	err := client.CancelPipeline("group/project-name", 789)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestNewClientWithProxy(t *testing.T) {
+	proxyConf := &ProxyConfig{
+		Enabled:  true,
+		Host:     "127.0.0.1",
+		Port:     1080,
+		User:     "user",
+		Password: "password",
+	}
+
+	client := NewClient("https://gitlab.example.com", "test-token", proxyConf)
+	if client.BaseURL != "https://gitlab.example.com" {
+		t.Errorf("expected BaseURL https://gitlab.example.com, got %s", client.BaseURL)
+	}
+
+	// Verify that DialContext function is configured on the transport
+	transport, ok := client.HTTPClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected Transport to be *http.Transport")
+	}
+
+	if transport.DialContext == nil {
+		t.Errorf("expected DialContext function to be configured when proxy is enabled")
+	}
+}
+

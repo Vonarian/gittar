@@ -16,6 +16,11 @@ export class Config {
     "pollIntervalSec": number;
     "notifications": NotificationSettings;
     "ignoreFailedPipelines": boolean;
+    "proxyEnabled": boolean;
+    "proxyHost": string;
+    "proxyPort": number;
+    "proxyUser": string;
+    "proxyPassword": string;
 
     /** Creates a new Config instance. */
     constructor($$source: Partial<Config> = {}) {
@@ -39,6 +44,21 @@ export class Config {
         }
         if (!("ignoreFailedPipelines" in $$source)) {
             this["ignoreFailedPipelines"] = false;
+        }
+        if (!("proxyEnabled" in $$source)) {
+            this["proxyEnabled"] = false;
+        }
+        if (!("proxyHost" in $$source)) {
+            this["proxyHost"] = "";
+        }
+        if (!("proxyPort" in $$source)) {
+            this["proxyPort"] = 0;
+        }
+        if (!("proxyUser" in $$source)) {
+            this["proxyUser"] = "";
+        }
+        if (!("proxyPassword" in $$source)) {
+            this["proxyPassword"] = "";
         }
 
         Object.assign(this, $$source);
