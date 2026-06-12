@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -80,6 +81,13 @@ func (s *AppService) getGitLabClient(conf *config.Config) *gitlab.Client {
 		s.proxyPort != conf.ProxyPort ||
 		s.proxyUser != conf.ProxyUser ||
 		s.proxyPassword != conf.ProxyPassword {
+
+		// Close idle connections on the old client's transport to avoid leaking/reusing unproxied connections
+		if s.gitlabClient != nil && s.gitlabClient.HTTPClient != nil {
+			if t, ok := s.gitlabClient.HTTPClient.Transport.(*http.Transport); ok {
+				t.CloseIdleConnections()
+			}
+		}
 
 		proxyConf := &gitlab.ProxyConfig{
 			Enabled:  conf.ProxyEnabled,

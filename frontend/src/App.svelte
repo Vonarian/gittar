@@ -67,8 +67,8 @@
   }
 
   // Polls backend for new telemetry data
-  async function fetchTelemetryData(showLoader = false) {
-    if (isFetching) {
+  async function fetchTelemetryData(showLoader = false, force = false) {
+    if (isFetching && !force) {
       console.log("[App] Telemetry fetch skipped (already in progress)");
       return;
     }
@@ -125,7 +125,7 @@
   // Triggered when settings are updated
   async function handleConfigSaved() {
     await loadPollingSettings();
-    await fetchTelemetryData(true);
+    await fetchTelemetryData(true, true);
     if (isConfigured && currentTab === "setup") {
       currentTab = "todos"; // Auto switch to main view
     }
@@ -139,7 +139,7 @@
         cfg.ignoreFailedPipelines = !cfg.ignoreFailedPipelines;
         await SaveConfig(cfg);
         ignoreFailedPipelines = cfg.ignoreFailedPipelines;
-        await fetchTelemetryData(true);
+        await fetchTelemetryData(true, true);
       }
     } catch (e) {
       console.error("Failed to toggle ignore failed pipelines:", e);
