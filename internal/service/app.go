@@ -11,16 +11,27 @@ import (
 
 	"gittar/internal/config"
 	"gittar/internal/gitlab"
-	"gittar/internal/tray"
 )
+
+// Notifier defines the interface for sending system alerts and updating the tray state.
+type Notifier interface {
+	Notify(title, body string) error
+	UpdateTray(passing, failing, running int)
+}
+
+// pipelineState tracks the ID and status of a pipeline run.
+type pipelineState struct {
+	ID     int    `json:"id"`
+	Status string `json:"status"`
+}
 
 // AppService handles bindings and telemetry orchestration.
 type AppService struct {
-	trayService    *tray.TrayService
+	trayService    Notifier
 	gitlabClient   *gitlab.Client
 	gitlabURL      string
 	gitlabToken    string
-	pipelineStates map[string]string
+	pipelineStates map[string]pipelineState
 	seenTodoIDs    map[int]bool
 	seenMRIDs      map[int]bool
 	isFirstFetch   bool
@@ -35,7 +46,7 @@ type AppService struct {
 // NewAppService creates a new application service instance.
 func NewAppService() *AppService {
 	return &AppService{
-		pipelineStates: make(map[string]string),
+		pipelineStates: make(map[string]pipelineState),
 		seenTodoIDs:    make(map[int]bool),
 		seenMRIDs:      make(map[int]bool),
 		isFirstFetch:   true,
@@ -110,7 +121,7 @@ func (s *AppService) getGitLabClient(conf *config.Config) *gitlab.Client {
 }
 
 // SetTray links the system tray manager to the application service.
-func (s *AppService) SetTray(t *tray.TrayService) {
+func (s *AppService) SetTray(t Notifier) {
 	s.trayService = t
 }
 
@@ -266,15 +277,27 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		}
 
 		// Check transition
-		prevStatus, exists := s.pipelineStates[path]
-		if exists && prevStatus != status {
-			if status == "success" && conf.Notifications.Enabled && conf.Notifications.PipelineSuccess {
-				s.trayService.Notify("Pipeline Passed", fmt.Sprintf("%s: pipeline passed on branch %s", name, ref))
-			} else if status == "failed" && conf.Notifications.Enabled && conf.Notifications.PipelineFailed {
-				s.trayService.Notify("Pipeline Failed", fmt.Sprintf("%s: pipeline failed on branch %s", name, ref))
+		key := fmt.Sprintf("%s:%s", path, ref)
+		prev, exists := s.pipelineStates[key]
+		if exists && !s.isFirstFetch && conf.Notifications.Enabled {
+			// Trigger notification if:
+			// 1. It is the same pipeline run, but its status changed to success/failed
+			// 2. It is a new pipeline run, and its status is success/failed
+			isSamePipelineStatusChange := prev.ID == pwj.Pipeline.ID && prev.Status != status
+			isNewPipelineFinished := prev.ID != pwj.Pipeline.ID && (status == "success" || status == "failed")
+
+			if isSamePipelineStatusChange || isNewPipelineFinished {
+				if status == "success" && conf.Notifications.PipelineSuccess {
+					_ = s.trayService.Notify("Pipeline Passed", fmt.Sprintf("%s: pipeline passed on branch %s", name, ref))
+				} else if status == "failed" && conf.Notifications.PipelineFailed {
+					_ = s.trayService.Notify("Pipeline Failed", fmt.Sprintf("%s: pipeline failed on branch %s", name, ref))
+				}
 			}
 		}
-		s.pipelineStates[path] = status
+		s.pipelineStates[key] = pipelineState{
+			ID:     pwj.Pipeline.ID,
+			Status: status,
+		}
 	}
 
 	// 5. Process new Todos transitions
@@ -313,7 +336,7 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 				}
 
 				if notify {
-					s.trayService.Notify(title, fmt.Sprintf("%s: %s", todo.Project.PathWithNamespace, body))
+					_ = s.trayService.Notify(title, fmt.Sprintf("%s: %s", todo.Project.PathWithNamespace, body))
 				}
 			}
 		}
@@ -343,9 +366,9 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 				}
 
 				if isReviewer && conf.Notifications.MRReviewRequest {
-					s.trayService.Notify("Review Request", fmt.Sprintf("You are requested to review: %s", mr.Title))
+					_ = s.trayService.Notify("Review Request", fmt.Sprintf("You are requested to review: %s", mr.Title))
 				} else if isAssignee && conf.Notifications.MRAssigned {
-					s.trayService.Notify("MR Assigned", fmt.Sprintf("Merge Request assigned to you: %s", mr.Title))
+					_ = s.trayService.Notify("MR Assigned", fmt.Sprintf("Merge Request assigned to you: %s", mr.Title))
 				}
 			}
 		}
@@ -460,3 +483,22 @@ func (s *AppService) CancelPipeline(projectPath string, pipelineID int) error {
 	client := s.getGitLabClient(conf)
 	return client.CancelPipeline(projectPath, pipelineID)
 }
+
+// TriggerTestNotification sends a test native notification.
+func (s *AppService) TriggerTestNotification() error {
+	if s.trayService == nil {
+		return fmt.Errorf("tray service not initialized")
+	}
+	return s.trayService.Notify("Gittar Test", "This is a test notification from Gittar settings!")
+}
+
+// ClearTelemetryCache flushes the GitLab client cache.
+func (s *AppService) ClearTelemetryCache() {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+	if s.gitlabClient != nil {
+		s.gitlabClient.ClearCache()
+	}
+}
+
+
