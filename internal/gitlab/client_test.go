@@ -167,3 +167,88 @@ func generateJSONProjects(count int) []string {
 	return out
 }
 
+func TestGetProjectMergeRequests(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if path == "/api/v4/projects/group/project1/merge_requests" {
+			if r.URL.Query().Get("state") != "opened" {
+				t.Errorf("expected state=opened query param, got %s", r.URL.Query().Get("state"))
+			}
+			_, _ = w.Write([]byte(`[{"id": 1, "iid": 101, "project_id": 10, "title": "Test MR 1", "state": "opened", "web_url": "http://example.com/group/project1/-/merge_requests/101"}]`))
+			return
+		}
+
+		if path == "/api/v4/projects/10/merge_requests/101" {
+			_, _ = w.Write([]byte(`{"id": 1, "iid": 101, "project_id": 10, "title": "Test MR 1", "state": "opened", "web_url": "http://example.com/group/project1/-/merge_requests/101"}`))
+			return
+		}
+
+		t.Errorf("unexpected path: %s", path)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token", nil)
+	mrs, err := client.GetProjectMergeRequests("group/project1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(mrs) != 1 {
+		t.Fatalf("expected 1 MR, got %d", len(mrs))
+	}
+	if mrs[0].Title != "Test MR 1" {
+		t.Errorf("expected title 'Test MR 1', got %s", mrs[0].Title)
+	}
+}
+
+func TestGetPipelinesWithJobs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if path == "/api/v4/projects/group/project1" {
+			_, _ = w.Write([]byte(`{"id": 10, "name": "project1", "path_with_namespace": "group/project1"}`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/pipelines" {
+			_, _ = w.Write([]byte(`[{"id": 201, "ref": "main", "status": "success"}]`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/pipelines/201" {
+			_, _ = w.Write([]byte(`{"id": 201, "ref": "main", "status": "success", "duration": 120}`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/pipelines/201/jobs" {
+			_, _ = w.Write([]byte(`[{"id": 301, "name": "build", "stage": "build", "status": "success"}]`))
+			return
+		}
+
+		t.Errorf("unexpected path: %s", path)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token", nil)
+	pwjList, err := client.GetPipelinesWithJobs("group/project1", 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(pwjList) != 1 {
+		t.Fatalf("expected 1 PipelineWithJobs, got %d", len(pwjList))
+	}
+	pwj := pwjList[0]
+	if pwj.ProjectName != "project1" {
+		t.Errorf("expected ProjectName 'project1', got %s", pwj.ProjectName)
+	}
+	if pwj.Pipeline.ID != 201 {
+		t.Errorf("expected Pipeline ID 201, got %d", pwj.Pipeline.ID)
+	}
+	if len(pwj.Jobs) != 1 || pwj.Jobs[0].Name != "build" {
+		t.Errorf("expected 1 job named 'build', got %v", pwj.Jobs)
+	}
+}
+

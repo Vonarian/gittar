@@ -201,22 +201,6 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		return nil, fmt.Errorf("failed to connect to GitLab: %w", err)
 	}
 
-	var wg sync.WaitGroup
-	var todos []gitlab.Todo
-	var mrs []gitlab.MergeRequest
-	var todosErr, mrsErr error
-
-	// Fetch Todos and MRs in parallel
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		todos, todosErr = client.GetTodos()
-	}()
-	go func() {
-		defer wg.Done()
-		mrs, mrsErr = client.GetMergeRequests(user.ID)
-	}()
-
 	// 2. Resolve Monitored Projects (direct + group resolution)
 	dedupProjects := make(map[string]bool)
 	for _, p := range conf.MonitoredProjects {
@@ -247,47 +231,103 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	}
 	groupWg.Wait()
 
-	// 3. Fetch Pipelines for all resolved projects concurrently
-	pipelines := make([]gitlab.PipelineWithJobs, 0)
+	// 3. Fetch all telemetry in parallel
+	var wg sync.WaitGroup
+	var todos []gitlab.Todo
+	var userMRs []gitlab.MergeRequest
+	var todosErr, userMRsErr error
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		todos, todosErr = client.GetTodos()
+	}()
+	go func() {
+		defer wg.Done()
+		userMRs, userMRsErr = client.GetMergeRequests(user.ID)
+	}()
+
+	// Fetch project-level pipelines and open MRs concurrently
 	var pipeMu sync.Mutex
-	var pipeWg sync.WaitGroup
+	pipelines := make([]gitlab.PipelineWithJobs, 0)
+
+	var projMRsMu sync.Mutex
+	var projMRs []gitlab.MergeRequest
 
 	for projectPath := range dedupProjects {
-		pipeWg.Add(1)
+		// Fetch pipelines
+		wg.Add(1)
 		go func(path string) {
-			defer pipeWg.Done()
-			pipe, err := client.GetPipelineWithJobs(path)
-			if err == nil && pipe != nil {
+			defer wg.Done()
+			pipes, err := client.GetPipelinesWithJobs(path, 10)
+			if err == nil && len(pipes) > 0 {
 				pipeMu.Lock()
-				pipelines = append(pipelines, *pipe)
+				pipelines = append(pipelines, pipes...)
 				pipeMu.Unlock()
+			}
+		}(projectPath)
+
+		// Fetch project-level open MRs
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+			mrs, err := client.GetProjectMergeRequests(path)
+			if err == nil && len(mrs) > 0 {
+				projMRsMu.Lock()
+				projMRs = append(projMRs, mrs...)
+				projMRsMu.Unlock()
 			}
 		}(projectPath)
 	}
 
-	// Wait for Todos, MRs, and Pipelines to complete
+	// Wait for all fetches to complete
 	wg.Wait()
-	pipeWg.Wait()
 
-	// Sort pipelines alphabetically by projectName/path to prevent reordering on updates
+	if todosErr != nil {
+		return nil, fmt.Errorf("failed to fetch todos: %w", todosErr)
+	}
+	if userMRsErr != nil {
+		return nil, fmt.Errorf("failed to fetch merge requests: %w", userMRsErr)
+	}
+
+	// Deduplicate MRs between user-involved MRs and project-level MRs
+	mrMap := make(map[int]gitlab.MergeRequest)
+	for _, mr := range userMRs {
+		mrMap[mr.ID] = mr
+	}
+	for _, mr := range projMRs {
+		if _, exists := mrMap[mr.ID]; !exists {
+			mrMap[mr.ID] = mr
+		}
+	}
+
+	finalMRs := make([]gitlab.MergeRequest, 0, len(mrMap))
+	for _, mr := range mrMap {
+		finalMRs = append(finalMRs, mr)
+	}
+
+	// Sort merge requests by UpdatedAt descending (most recently updated first)
+	sort.Slice(finalMRs, func(i, j int) bool {
+		return finalMRs[i].UpdatedAt.After(finalMRs[j].UpdatedAt)
+	})
+
+	// Sort pipelines alphabetically by projectName/path, and then by pipeline ID descending to keep newest first
 	sort.Slice(pipelines, func(i, j int) bool {
 		if pipelines[i].ProjectName == pipelines[j].ProjectName {
+			if pipelines[i].ProjectPath == pipelines[j].ProjectPath {
+				return pipelines[i].Pipeline.ID > pipelines[j].Pipeline.ID
+			}
 			return pipelines[i].ProjectPath < pipelines[j].ProjectPath
 		}
 		return pipelines[i].ProjectName < pipelines[j].ProjectName
 	})
 
-	if todosErr != nil {
-		return nil, fmt.Errorf("failed to fetch todos: %w", todosErr)
-	}
-	if mrsErr != nil {
-		return nil, fmt.Errorf("failed to fetch merge requests: %w", mrsErr)
-	}
-
 	// 4. Process pipeline transitions & trigger system alerts
 	passingCount := 0
 	failingCount := 0
 	runningCount := 0
+
+	processedKeys := make(map[string]bool)
 
 	s.stateMu.Lock()
 	for _, pwj := range pipelines {
@@ -300,49 +340,53 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		name := pwj.ProjectName
 		ref := pwj.Pipeline.Ref
 
-		// Count statuses
-		switch status {
-		case "success":
-			passingCount++
-		case "failed":
-			failingCount++
-		case "running", "pending":
-			runningCount++
-		}
-
-		// Check transition
 		key := fmt.Sprintf("%s:%s", path, ref)
-		prev, exists := s.pipelineStates[key]
-		if !s.isFirstFetch && conf.Notifications.Enabled {
-			if !exists {
-				// Brand new pipeline run/ref
-				if status == "running" || status == "pending" {
-					_ = s.trayService.Notify("Pipeline Started", fmt.Sprintf("%s: pipeline started on branch %s", name, cleanRef(ref)))
-				}
-			} else {
-				isNewPipelineRun := prev.ID != pwj.Pipeline.ID
-				isSamePipelineStatusChange := prev.ID == pwj.Pipeline.ID && prev.Status != status
+		if !processedKeys[key] {
+			processedKeys[key] = true
 
-				if isNewPipelineRun {
+			// Count statuses
+			switch status {
+			case "success":
+				passingCount++
+			case "failed":
+				failingCount++
+			case "running", "pending":
+				runningCount++
+			}
+
+			// Check transition
+			prev, exists := s.pipelineStates[key]
+			if !s.isFirstFetch && conf.Notifications.Enabled {
+				if !exists {
+					// Brand new pipeline run/ref
 					if status == "running" || status == "pending" {
 						_ = s.trayService.Notify("Pipeline Started", fmt.Sprintf("%s: pipeline started on branch %s", name, cleanRef(ref)))
-					} else if status == "success" && conf.Notifications.PipelineSuccess {
-						_ = s.trayService.Notify("Pipeline Passed", fmt.Sprintf("%s: pipeline passed on branch %s", name, cleanRef(ref)))
-					} else if status == "failed" && conf.Notifications.PipelineFailed {
-						_ = s.trayService.Notify("Pipeline Failed", fmt.Sprintf("%s: pipeline failed on branch %s", name, cleanRef(ref)))
 					}
-				} else if isSamePipelineStatusChange {
-					if status == "success" && conf.Notifications.PipelineSuccess {
-						_ = s.trayService.Notify("Pipeline Passed", fmt.Sprintf("%s: pipeline passed on branch %s", name, cleanRef(ref)))
-					} else if status == "failed" && conf.Notifications.PipelineFailed {
-						_ = s.trayService.Notify("Pipeline Failed", fmt.Sprintf("%s: pipeline failed on branch %s", name, cleanRef(ref)))
+				} else {
+					isNewPipelineRun := prev.ID != pwj.Pipeline.ID
+					isSamePipelineStatusChange := prev.ID == pwj.Pipeline.ID && prev.Status != status
+
+					if isNewPipelineRun {
+						if status == "running" || status == "pending" {
+							_ = s.trayService.Notify("Pipeline Started", fmt.Sprintf("%s: pipeline started on branch %s", name, cleanRef(ref)))
+						} else if status == "success" && conf.Notifications.PipelineSuccess {
+							_ = s.trayService.Notify("Pipeline Passed", fmt.Sprintf("%s: pipeline passed on branch %s", name, cleanRef(ref)))
+						} else if status == "failed" && conf.Notifications.PipelineFailed {
+							_ = s.trayService.Notify("Pipeline Failed", fmt.Sprintf("%s: pipeline failed on branch %s", name, cleanRef(ref)))
+						}
+					} else if isSamePipelineStatusChange {
+						if status == "success" && conf.Notifications.PipelineSuccess {
+							_ = s.trayService.Notify("Pipeline Passed", fmt.Sprintf("%s: pipeline passed on branch %s", name, cleanRef(ref)))
+						} else if status == "failed" && conf.Notifications.PipelineFailed {
+							_ = s.trayService.Notify("Pipeline Failed", fmt.Sprintf("%s: pipeline failed on branch %s", name, cleanRef(ref)))
+						}
 					}
 				}
 			}
-		}
-		s.pipelineStates[key] = pipelineState{
-			ID:     pwj.Pipeline.ID,
-			Status: status,
+			s.pipelineStates[key] = pipelineState{
+				ID:     pwj.Pipeline.ID,
+				Status: status,
+			}
 		}
 	}
 
@@ -393,7 +437,7 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		s.mrStates = make(map[int]mrState)
 	}
 
-	for _, mr := range mrs {
+	for _, mr := range finalMRs {
 		newPipelineStatus := getPipelineStatus(mr.HeadPipeline)
 
 		// Check if we already have a record for this MR
@@ -453,7 +497,7 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 
 	// 7. Check for closed/merged MRs asynchronously
 	currentMRIDs := make(map[int]bool)
-	for _, mr := range mrs {
+	for _, mr := range finalMRs {
 		currentMRIDs[mr.ID] = true
 	}
 
@@ -502,7 +546,7 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	payload := &gitlab.TelemetryPayload{
 		Todos:         todos,
 		Pipelines:     pipelines,
-		MergeRequests: mrs,
+		MergeRequests: finalMRs,
 		Username:      user.Username,
 		AvatarURL:     user.AvatarURL,
 	}

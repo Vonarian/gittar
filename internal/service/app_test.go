@@ -84,6 +84,10 @@ func TestPipelineTransitions(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id": 1, "name": "project1", "path_with_namespace": "group/project1"}`))
 			return
 		}
+		if path == "/api/v4/projects/group/project1/merge_requests" {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
 		if path == "/api/v4/projects/group/project1/pipelines" {
 			pid := atomic.LoadInt32(&currentPipelineID)
 			ref := currentPipelineRef
