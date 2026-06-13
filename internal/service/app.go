@@ -153,6 +153,7 @@ func (s *AppService) getGitLabClient(conf *config.Config) *gitlab.Client {
 	return s.gitlabClient
 }
 
+//wails:ignore
 // SetTray links the system tray manager to the application service.
 func (s *AppService) SetTray(t Notifier) {
 	s.trayService = t
