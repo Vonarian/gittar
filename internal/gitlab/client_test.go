@@ -1,8 +1,10 @@
 package gitlab
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -102,5 +104,66 @@ func TestNewClientWithProxy(t *testing.T) {
 	if transport.DialContext == nil {
 		t.Errorf("expected DialContext function to be configured when proxy is enabled")
 	}
+}
+
+func TestGetGroupProjects(t *testing.T) {
+	var callCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		// Verify endpoint path (escaped group name "my-group")
+		if r.URL.Path != "/api/v4/groups/my-group/projects" {
+			t.Errorf("expected path /api/v4/groups/my-group/projects, got %s", r.URL.Path)
+		}
+
+		query := r.URL.Query()
+		if query.Get("simple") != "true" {
+			t.Errorf("expected simple=true query param, got %s", query.Get("simple"))
+		}
+		if query.Get("include_subgroups") != "true" {
+			t.Errorf("expected include_subgroups=true query param, got %s", query.Get("include_subgroups"))
+		}
+		if query.Get("per_page") != "100" {
+			t.Errorf("expected per_page=100 query param, got %s", query.Get("per_page"))
+		}
+
+		page := query.Get("page")
+		w.Header().Set("Content-Type", "application/json")
+		switch page {
+		case "1":
+			// Return 100 items (representing first full page)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[` + strings.Join(generateJSONProjects(100), ",") + `]`))
+		case "2":
+			// Return 2 items (representing last partial page)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`[` + strings.Join(generateJSONProjects(2), ",") + `]`))
+		default:
+			t.Errorf("unexpected page request: %s", page)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("[]"))
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token", nil)
+	projects, err := client.GetGroupProjects("my-group")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(projects) != 102 {
+		t.Errorf("expected 102 projects, got %d", len(projects))
+	}
+	if callCount != 2 {
+		t.Errorf("expected 2 page requests, got %d", callCount)
+	}
+}
+
+func generateJSONProjects(count int) []string {
+	var out []string
+	for i := 0; i < count; i++ {
+		out = append(out, fmt.Sprintf(`{"id": %d, "name": "project-%d", "path_with_namespace": "my-group/project-%d"}`, i, i, i))
+	}
+	return out
 }
 

@@ -379,19 +379,34 @@ func (c *Client) GetJobLogSnippet(projectIDOrPath string, jobID int) (string, er
 	return strings.Join(lines, "\n"), nil
 }
 
-// GetGroupProjects fetches projects under a group.
+// GetGroupProjects fetches all projects under a group, including nested subgroups, handling pagination.
 func (c *Client) GetGroupProjects(groupIDOrPath string) ([]ProjectRef, error) {
 	escapedPath := url.PathEscape(groupIDOrPath)
-	data, _, err := c.doRequest(fmt.Sprintf("groups/%s/projects?simple=true&per_page=30", escapedPath))
-	if err != nil {
-		return nil, err
-	}
+	var allProjects []ProjectRef
+	page := 1
+	for {
+		path := fmt.Sprintf("groups/%s/projects?simple=true&include_subgroups=true&per_page=100&page=%d", escapedPath, page)
+		data, _, err := c.doRequest(path)
+		if err != nil {
+			return nil, err
+		}
 
-	var projects []ProjectRef
-	if err := json.Unmarshal(data, &projects); err != nil {
-		return nil, err
+		var projects []ProjectRef
+		if err := json.Unmarshal(data, &projects); err != nil {
+			return nil, err
+		}
+
+		if len(projects) == 0 {
+			break
+		}
+
+		allProjects = append(allProjects, projects...)
+		if len(projects) < 100 {
+			break
+		}
+		page++
 	}
-	return projects, nil
+	return allProjects, nil
 }
 
 // doWriteRequest executes a write operation (POST/PUT/DELETE) on the GitLab API.
