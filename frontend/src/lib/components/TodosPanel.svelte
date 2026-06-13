@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import type { Todo } from "../../../bindings/gittar/internal/gitlab/models";
   import { Browser, Clipboard } from "@wailsio/runtime";
   import { MarkTodoAsDone } from "../../../bindings/gittar/internal/service/appservice";
@@ -132,7 +132,10 @@
   );
 
   $effect(() => {
-    recentlyDoneTodos = recentlyDoneTodos.filter((rd) => todos.some((t) => t.id === rd.id));
+    const allTodos = todos;
+    untrack(() => {
+      recentlyDoneTodos = recentlyDoneTodos.filter((rd) => allTodos.some((t) => t.id === rd.id));
+    });
   });
 
   function resetFilters() {
