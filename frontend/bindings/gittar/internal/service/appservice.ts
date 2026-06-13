@@ -16,15 +16,23 @@ import * as config$0 from "../config/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as gitlab$0 from "../gitlab/models.js";
+
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as tray$0 from "../tray/models.js";
+import * as $models from "./models.js";
 
 /**
  * CancelPipeline cancels a running pipeline.
  */
 export function CancelPipeline(projectPath: string, pipelineID: number): $CancellablePromise<void> {
     return $Call.ByID(1579050620, projectPath, pipelineID);
+}
+
+/**
+ * ClearTelemetryCache flushes the GitLab client cache.
+ */
+export function ClearTelemetryCache(): $CancellablePromise<void> {
+    return $Call.ByID(1916818586);
 }
 
 /**
@@ -99,8 +107,15 @@ export function SaveConfig(conf: config$0.Config | null): $CancellablePromise<vo
 /**
  * SetTray links the system tray manager to the application service.
  */
-export function SetTray(t: tray$0.TrayService | null): $CancellablePromise<void> {
+export function SetTray(t: $models.Notifier): $CancellablePromise<void> {
     return $Call.ByID(3964840448, t);
+}
+
+/**
+ * TriggerTestNotification sends a test native notification.
+ */
+export function TriggerTestNotification(): $CancellablePromise<void> {
+    return $Call.ByID(2058535599);
 }
 
 // Private type creation functions

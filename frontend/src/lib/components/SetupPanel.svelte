@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { GetConfig, SaveConfig, FetchTelemetry } from "../../../bindings/gittar/internal/service/appservice";
+  import { GetConfig, SaveConfig, FetchTelemetry, TriggerTestNotification } from "../../../bindings/gittar/internal/service/appservice";
   import { Config } from "../../../bindings/gittar/internal/config/models";
 
   interface Props {
@@ -36,6 +36,9 @@
   let testStatus = $state<"idle" | "success" | "error">("idle");
   let testError = $state("");
   let saveSuccess = $state(false);
+
+  let testNotifStatus = $state<"idle" | "success" | "error">("idle");
+  let testNotifError = $state("");
 
   onMount(async () => {
     try {
@@ -170,6 +173,24 @@
       testError = e.message || "Request failed.";
     } finally {
       isTesting = false;
+    }
+  }
+
+  async function handleTestNotification() {
+    testNotifStatus = "idle";
+    testNotifError = "";
+    try {
+      await TriggerTestNotification();
+      testNotifStatus = "success";
+      // Reset success status after 3 seconds
+      setTimeout(() => {
+        if (testNotifStatus === "success") {
+          testNotifStatus = "idle";
+        }
+      }, 3000);
+    } catch (e: any) {
+      testNotifStatus = "error";
+      testNotifError = e.message || "Failed to trigger notification.";
     }
   }
 </script>
@@ -394,6 +415,24 @@
               <input type="checkbox" bind:checked={notifTodoGeneric} class="rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0 focus:ring-offset-0" />
               <span>Generic system todos</span>
             </label>
+          </div>
+
+          <!-- Send Test Notification -->
+          <div class="flex items-center justify-between border-t border-slate-900/60 pt-3">
+            <button
+              type="button"
+              onclick={handleTestNotification}
+              disabled={isTesting || isSaving}
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 transition flex items-center space-x-1.5 disabled:opacity-50"
+            >
+              <span>Send Test Notification</span>
+            </button>
+            
+            {#if testNotifStatus === "success"}
+              <span class="text-emerald-400 text-xs font-medium">✓ Notification triggered! Check your desktop.</span>
+            {:else if testNotifStatus === "error"}
+              <span class="text-rose-400 text-xs font-medium">✗ {testNotifError}</span>
+            {/if}
           </div>
         </div>
       {/if}

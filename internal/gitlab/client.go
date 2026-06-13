@@ -470,3 +470,11 @@ func (c *Client) CancelPipeline(projectPath string, pipelineID int) error {
 	_, err := c.doWriteRequest("POST", path, nil)
 	return err
 }
+
+// ClearCache flushes all cached HTTP responses.
+func (c *Client) ClearCache() {
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	c.cache = make(map[string]*cacheEntry)
+}
+
