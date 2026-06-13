@@ -334,7 +334,7 @@ func (c *Client) GetMergeRequests(userID int) ([]MergeRequest, error) {
 		result = append(result, mr)
 	}
 
-	// Fetch detailed MR information for each MR concurrently to populate head_pipeline
+	// Fetch detailed MR information for each MR concurrently to populate head_pipeline if missing
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	detailedMRs := make([]MergeRequest, len(result))
@@ -343,21 +343,135 @@ func (c *Client) GetMergeRequests(userID int) ([]MergeRequest, error) {
 		wg.Add(1)
 		go func(idx int, m MergeRequest) {
 			defer wg.Done()
-			detailed, err := c.GetSingleMergeRequest(m.ProjectID, m.IID)
-			if err == nil && detailed != nil {
-				mu.Lock()
-				detailedMRs[idx] = *detailed
-				mu.Unlock()
-			} else {
-				mu.Lock()
-				detailedMRs[idx] = m
-				mu.Unlock()
+			if m.HeadPipeline == nil {
+				detailed, err := c.GetSingleMergeRequest(m.ProjectID, m.IID)
+				if err == nil && detailed != nil {
+					mu.Lock()
+					detailedMRs[idx] = *detailed
+					mu.Unlock()
+					return
+				}
 			}
+			mu.Lock()
+			detailedMRs[idx] = m
+			mu.Unlock()
 		}(i, mr)
 	}
 	wg.Wait()
 
 	return detailedMRs, nil
+}
+
+// GetProjectMergeRequests fetches open merge requests for a project.
+func (c *Client) GetProjectMergeRequests(projectIDOrPath string) ([]MergeRequest, error) {
+	escapedPath := url.PathEscape(projectIDOrPath)
+	data, _, err := c.doRequest(fmt.Sprintf("projects/%s/merge_requests?state=opened&per_page=50", escapedPath))
+	if err != nil {
+		return nil, err
+	}
+
+	var mrs []MergeRequest
+	if err := json.Unmarshal(data, &mrs); err != nil {
+		return nil, err
+	}
+
+	// Fetch detailed MR information for each MR concurrently to populate head_pipeline if missing
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	detailedMRs := make([]MergeRequest, len(mrs))
+
+	for i, mr := range mrs {
+		wg.Add(1)
+		go func(idx int, m MergeRequest) {
+			defer wg.Done()
+			if m.HeadPipeline == nil {
+				detailed, err := c.GetSingleMergeRequest(m.ProjectID, m.IID)
+				if err == nil && detailed != nil {
+					mu.Lock()
+					detailedMRs[idx] = *detailed
+					mu.Unlock()
+					return
+				}
+			}
+			mu.Lock()
+			detailedMRs[idx] = m
+			mu.Unlock()
+		}(i, mr)
+	}
+	wg.Wait()
+
+	return detailedMRs, nil
+}
+
+// GetPipelinesWithJobs fetches up to limit pipelines for a project, along with their individual jobs.
+func (c *Client) GetPipelinesWithJobs(projectIDOrPath string, limit int) ([]PipelineWithJobs, error) {
+	escapedPath := url.PathEscape(projectIDOrPath)
+
+	// 1. Get project details to know name/path
+	proj, err := c.GetProjectDetails(projectIDOrPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Get latest pipelines
+	pipelinesData, _, err := c.doRequest(fmt.Sprintf("projects/%s/pipelines?per_page=%d", escapedPath, limit))
+	if err != nil {
+		return nil, err
+	}
+
+	var pipelines []Pipeline
+	if err := json.Unmarshal(pipelinesData, &pipelines); err != nil {
+		return nil, err
+	}
+
+	if len(pipelines) == 0 {
+		return []PipelineWithJobs{
+			{
+				ProjectName: proj.Name,
+				ProjectPath: proj.PathWithNamespace,
+			},
+		}, nil
+	}
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	results := make([]PipelineWithJobs, len(pipelines))
+
+	for i, pipe := range pipelines {
+		wg.Add(1)
+		go func(idx int, p Pipeline) {
+			defer wg.Done()
+
+			// Fetch full pipeline details to get duration/user info if available
+			detailedPipeline := p
+			fullPipeData, _, err := c.doRequest(fmt.Sprintf("projects/%s/pipelines/%d", escapedPath, p.ID))
+			if err == nil {
+				var detailed Pipeline
+				if err2 := json.Unmarshal(fullPipeData, &detailed); err2 == nil {
+					detailedPipeline = detailed
+				}
+			}
+
+			// Fetch pipeline jobs
+			var jobs []Job
+			jobsData, _, err3 := c.doRequest(fmt.Sprintf("projects/%s/pipelines/%d/jobs?per_page=50", escapedPath, p.ID))
+			if err3 == nil {
+				_ = json.Unmarshal(jobsData, &jobs)
+			}
+
+			mu.Lock()
+			results[idx] = PipelineWithJobs{
+				Pipeline:    detailedPipeline,
+				Jobs:        jobs,
+				ProjectName: proj.Name,
+				ProjectPath: proj.PathWithNamespace,
+			}
+			mu.Unlock()
+		}(i, pipe)
+	}
+	wg.Wait()
+
+	return results, nil
 }
 
 // GetJobLogSnippet fetches the final 10 lines of a job's build log on failure.

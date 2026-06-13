@@ -20,6 +20,7 @@
   let groupFilter = $state("all");
   let projectFilter = $state("all");
   let userFilter = $state("all");
+  let involvementFilter = $state("all");
 
   // Drag-and-drop state
   let draggedMR = $state<MergeRequest | null>(null);
@@ -52,6 +53,7 @@
     groupFilter = localStorage.getItem("gittar_filter_mrs_group") || "all";
     projectFilter = localStorage.getItem("gittar_filter_mrs_project") || "all";
     userFilter = localStorage.getItem("gittar_filter_mrs_user") || "all";
+    involvementFilter = localStorage.getItem("gittar_filter_mrs_involvement") || "all";
     activeMRTab = (localStorage.getItem("gittar_filter_mrs_tab") || "all") as any;
 
     window.addEventListener("click", closeContextMenu);
@@ -72,6 +74,7 @@
     localStorage.setItem("gittar_filter_mrs_group", groupFilter);
     localStorage.setItem("gittar_filter_mrs_project", projectFilter);
     localStorage.setItem("gittar_filter_mrs_user", userFilter);
+    localStorage.setItem("gittar_filter_mrs_involvement", involvementFilter);
     localStorage.setItem("gittar_filter_mrs_tab", activeMRTab);
   });
 
@@ -190,7 +193,13 @@
         (mr.assignees || []).some((a) => a.name === userFilter) ||
         (mr.reviewers || []).some((r) => r.name === userFilter);
 
-      return matchesSearch && matchesGroup && matchesProject && matchesUser;
+      const matchesInvolvement =
+        involvementFilter === "all" ||
+        mr.author?.username === username ||
+        (mr.assignees || []).some((a) => a.username === username) ||
+        (mr.reviewers || []).some((r) => r.username === username);
+
+      return matchesSearch && matchesGroup && matchesProject && matchesUser && matchesInvolvement;
     })
   );
 
@@ -220,6 +229,7 @@
     groupFilter = "all";
     projectFilter = "all";
     userFilter = "all";
+    involvementFilter = "all";
   }
 
   function getLabelColorHash(label: string): string {
@@ -470,8 +480,17 @@
         {/each}
       </select>
 
+      <!-- Involvement Filter -->
+      <select
+        bind:value={involvementFilter}
+        class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
+      >
+        <option value="all">All MRs</option>
+        <option value="mine">My MRs Only</option>
+      </select>
+
       <!-- Reset Filters Button -->
-      {#if searchQuery !== "" || groupFilter !== "all" || projectFilter !== "all" || userFilter !== "all"}
+      {#if searchQuery !== "" || groupFilter !== "all" || projectFilter !== "all" || userFilter !== "all" || involvementFilter !== "all"}
         <button
           onclick={resetFilters}
           class="px-3 py-1.5 border border-indigo-500/30 hover:border-indigo-550/40 bg-indigo-550/10 hover:bg-indigo-550/20 text-indigo-400 text-xs font-semibold rounded-lg transition"

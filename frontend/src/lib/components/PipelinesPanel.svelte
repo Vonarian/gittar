@@ -404,7 +404,7 @@
       </div>
     {:else if viewMode === "list"}
       <div class="h-full overflow-y-auto p-6 space-y-6">
-        {#each filteredPipelines as pwj (pwj.projectPath)}
+        {#each filteredPipelines as pwj (pwj.pipeline?.id || pwj.projectPath)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             oncontextmenu={(e) => { if (pwj.pipeline && pwj.pipeline.id > 0) handleContextMenu(e, pwj.pipeline.web_url); }}
@@ -416,6 +416,11 @@
                 <div class="flex items-center space-x-2.5">
                   <h3 class="text-base font-semibold text-slate-100">{pwj.projectName}</h3>
                   <span class="text-xs font-mono text-slate-500">({pwj.projectPath})</span>
+                  {#if pwj.pipeline?.ref}
+                    <span class="px-1.5 py-0.5 text-[9px] font-bold tracking-wider bg-slate-900/60 text-indigo-400 border border-slate-800/80 rounded font-mono">
+                      {pwj.pipeline.ref}
+                    </span>
+                  {/if}
                 </div>
                 
                 {#if pwj.pipeline?.id > 0}
@@ -589,14 +594,14 @@
             <span class="px-1.5 py-0.5 text-[10px] font-bold bg-slate-800 text-slate-400 rounded-full">{pendingPipelines.length}</span>
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
-            {#each pendingPipelines as pwj (pwj.projectPath)}
+            {#each pendingPipelines as pwj (pwj.pipeline?.id || pwj.projectPath)}
               <div
                 class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl transition"
               >
                 <div class="text-[10px] font-bold text-indigo-400 truncate">{pwj.projectPath}</div>
                 <h4 class="text-xs font-semibold text-slate-200 mt-1 truncate">{pwj.projectName}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500 font-mono">
-                  <span>{formatSHA(pwj.pipeline.sha)}</span>
+                  <span>{formatSHA(pwj.pipeline.sha)}{#if pwj.pipeline?.ref} ({pwj.pipeline.ref}){/if}</span>
                   <span class="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase text-[8px] font-bold">pending</span>
                 </div>
               </div>
@@ -611,14 +616,14 @@
             <span class="px-1.5 py-0.5 text-[10px] font-bold bg-amber-500/10 text-amber-400 rounded-full">{runningPipelines.length}</span>
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
-            {#each runningPipelines as pwj (pwj.projectPath)}
+            {#each runningPipelines as pwj (pwj.pipeline?.id || pwj.projectPath)}
               <div
                 class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl transition"
               >
                 <div class="text-[10px] font-bold text-indigo-400 truncate">{pwj.projectPath}</div>
                 <h4 class="text-xs font-semibold text-slate-200 mt-1 truncate">{pwj.projectName}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500 font-mono">
-                  <span>{formatSHA(pwj.pipeline.sha)}</span>
+                  <span>{formatSHA(pwj.pipeline.sha)}{#if pwj.pipeline?.ref} ({pwj.pipeline.ref}){/if}</span>
                   <div class="flex items-center space-x-2">
                     <button
                       onclick={(e) => { e.stopPropagation(); handleCancel(pwj.projectPath, pwj.pipeline.id); }}
@@ -642,12 +647,12 @@
             <span class="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded-full">{successPipelines.length}</span>
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
-            {#each successPipelines as pwj (pwj.projectPath)}
+            {#each successPipelines as pwj (pwj.pipeline?.id || pwj.projectPath)}
               <div class="group p-3 bg-slate-950/20 border border-slate-900/40 rounded-xl opacity-80 hover:opacity-100 transition">
                 <div class="text-[10px] font-bold text-indigo-400 truncate">{pwj.projectPath}</div>
-                <h4 class="text-xs font-semibold text-slate-250 mt-1 truncate">{pwj.projectName}</h4>
+                <h4 class="text-xs font-semibold text-slate-255 mt-1 truncate">{pwj.projectName}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500 font-mono">
-                  <span>{formatSHA(pwj.pipeline.sha)}</span>
+                  <span>{formatSHA(pwj.pipeline.sha)}{#if pwj.pipeline?.ref} ({pwj.pipeline.ref}){/if}</span>
                   <span class="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 uppercase text-[8px] font-bold">passed</span>
                 </div>
               </div>
@@ -662,14 +667,14 @@
             <span class="px-1.5 py-0.5 text-[10px] font-bold bg-rose-500/10 text-rose-400 rounded-full">{failedPipelines.length}</span>
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
-            {#each failedPipelines as pwj (pwj.projectPath)}
+            {#each failedPipelines as pwj (pwj.pipeline?.id || pwj.projectPath)}
               <div
                 class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl transition"
               >
                 <div class="text-[10px] font-bold text-indigo-400 truncate">{pwj.projectPath}</div>
                 <h4 class="text-xs font-semibold text-slate-200 mt-1 truncate">{pwj.projectName}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500 font-mono">
-                  <span>{formatSHA(pwj.pipeline.sha)}</span>
+                  <span>{formatSHA(pwj.pipeline.sha)}{#if pwj.pipeline?.ref} ({pwj.pipeline.ref}){/if}</span>
                   <button
                     onclick={(e) => { e.stopPropagation(); handleRetry(pwj.projectPath, pwj.pipeline.id); }}
                     disabled={actionLoading[pwj.pipeline.id]}
@@ -690,14 +695,14 @@
             <span class="px-1.5 py-0.5 text-[10px] font-bold bg-slate-800 text-slate-400 rounded-full">{finishedOtherPipelines.length}</span>
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
-            {#each finishedOtherPipelines as pwj (pwj.projectPath)}
+            {#each finishedOtherPipelines as pwj (pwj.pipeline?.id || pwj.projectPath)}
               <div
                 class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl transition"
               >
                 <div class="text-[10px] font-bold text-indigo-400 truncate">{pwj.projectPath}</div>
                 <h4 class="text-xs font-semibold text-slate-200 mt-1 truncate">{pwj.projectName}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500 font-mono">
-                  <span>{formatSHA(pwj.pipeline.sha)}</span>
+                  <span>{formatSHA(pwj.pipeline.sha)}{#if pwj.pipeline?.ref} ({pwj.pipeline.ref}){/if}</span>
                   <span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-800 uppercase text-[8px] font-bold">{pwj.pipeline.status}</span>
                 </div>
               </div>
