@@ -17,10 +17,6 @@ import * as config$0 from "../config/models.js";
 // @ts-ignore: Unused imports
 import * as gitlab$0 from "../gitlab/models.js";
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as $models from "./models.js";
-
 /**
  * CancelPipeline cancels a running pipeline.
  */
@@ -102,13 +98,6 @@ export function RetryPipeline(projectPath: string, pipelineID: number): $Cancell
  */
 export function SaveConfig(conf: config$0.Config | null): $CancellablePromise<void> {
     return $Call.ByID(927934359, conf);
-}
-
-/**
- * SetTray links the system tray manager to the application service.
- */
-export function SetTray(t: $models.Notifier): $CancellablePromise<void> {
-    return $Call.ByID(3964840448, t);
 }
 
 /**

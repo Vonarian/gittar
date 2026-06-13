@@ -5,7 +5,3 @@ import * as AppService from "./appservice.js";
 export {
     AppService
 };
-
-export type {
-    Notifier
-} from "./models.js";
