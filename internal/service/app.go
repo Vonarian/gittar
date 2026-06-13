@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 
 	"gittar/internal/config"
@@ -25,6 +26,36 @@ type pipelineState struct {
 	Status string `json:"status"`
 }
 
+// mrState tracks the state and head pipeline status of a Merge Request.
+type mrState struct {
+	ID             int    `json:"id"`
+	IID            int    `json:"iid"`
+	ProjectID      int    `json:"project_id"`
+	Title          string `json:"title"`
+	State          string `json:"state"`
+	PipelineStatus string `json:"pipeline_status"`
+}
+
+func cleanRef(ref string) string {
+	if strings.HasPrefix(ref, "refs/heads/") {
+		return strings.TrimPrefix(ref, "refs/heads/")
+	}
+	if strings.HasPrefix(ref, "refs/merge-requests/") {
+		parts := strings.Split(ref, "/")
+		if len(parts) >= 3 {
+			return fmt.Sprintf("MR !%s", parts[2])
+		}
+	}
+	return ref
+}
+
+func getPipelineStatus(hp *gitlab.HeadPipeline) string {
+	if hp == nil {
+		return ""
+	}
+	return hp.Status
+}
+
 // AppService handles bindings and telemetry orchestration.
 type AppService struct {
 	trayService    Notifier
@@ -34,6 +65,7 @@ type AppService struct {
 	pipelineStates map[string]pipelineState
 	seenTodoIDs    map[int]bool
 	seenMRIDs      map[int]bool
+	mrStates       map[int]mrState
 	isFirstFetch   bool
 	stateMu        sync.Mutex
 	proxyEnabled   bool
@@ -49,6 +81,7 @@ func NewAppService() *AppService {
 		pipelineStates: make(map[string]pipelineState),
 		seenTodoIDs:    make(map[int]bool),
 		seenMRIDs:      make(map[int]bool),
+		mrStates:       make(map[int]mrState),
 		isFirstFetch:   true,
 	}
 }
@@ -279,18 +312,30 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		// Check transition
 		key := fmt.Sprintf("%s:%s", path, ref)
 		prev, exists := s.pipelineStates[key]
-		if exists && !s.isFirstFetch && conf.Notifications.Enabled {
-			// Trigger notification if:
-			// 1. It is the same pipeline run, but its status changed to success/failed
-			// 2. It is a new pipeline run, and its status is success/failed
-			isSamePipelineStatusChange := prev.ID == pwj.Pipeline.ID && prev.Status != status
-			isNewPipelineFinished := prev.ID != pwj.Pipeline.ID && (status == "success" || status == "failed")
+		if !s.isFirstFetch && conf.Notifications.Enabled {
+			if !exists {
+				// Brand new pipeline run/ref
+				if status == "running" || status == "pending" {
+					_ = s.trayService.Notify("Pipeline Started", fmt.Sprintf("%s: pipeline started on branch %s", name, cleanRef(ref)))
+				}
+			} else {
+				isNewPipelineRun := prev.ID != pwj.Pipeline.ID
+				isSamePipelineStatusChange := prev.ID == pwj.Pipeline.ID && prev.Status != status
 
-			if isSamePipelineStatusChange || isNewPipelineFinished {
-				if status == "success" && conf.Notifications.PipelineSuccess {
-					_ = s.trayService.Notify("Pipeline Passed", fmt.Sprintf("%s: pipeline passed on branch %s", name, ref))
-				} else if status == "failed" && conf.Notifications.PipelineFailed {
-					_ = s.trayService.Notify("Pipeline Failed", fmt.Sprintf("%s: pipeline failed on branch %s", name, ref))
+				if isNewPipelineRun {
+					if status == "running" || status == "pending" {
+						_ = s.trayService.Notify("Pipeline Started", fmt.Sprintf("%s: pipeline started on branch %s", name, cleanRef(ref)))
+					} else if status == "success" && conf.Notifications.PipelineSuccess {
+						_ = s.trayService.Notify("Pipeline Passed", fmt.Sprintf("%s: pipeline passed on branch %s", name, cleanRef(ref)))
+					} else if status == "failed" && conf.Notifications.PipelineFailed {
+						_ = s.trayService.Notify("Pipeline Failed", fmt.Sprintf("%s: pipeline failed on branch %s", name, cleanRef(ref)))
+					}
+				} else if isSamePipelineStatusChange {
+					if status == "success" && conf.Notifications.PipelineSuccess {
+						_ = s.trayService.Notify("Pipeline Passed", fmt.Sprintf("%s: pipeline passed on branch %s", name, cleanRef(ref)))
+					} else if status == "failed" && conf.Notifications.PipelineFailed {
+						_ = s.trayService.Notify("Pipeline Failed", fmt.Sprintf("%s: pipeline failed on branch %s", name, cleanRef(ref)))
+					}
 				}
 			}
 		}
@@ -343,7 +388,36 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	}
 
 	// 6. Process new Merge Requests transitions
+	if s.mrStates == nil {
+		s.mrStates = make(map[int]mrState)
+	}
+
 	for _, mr := range mrs {
+		newPipelineStatus := getPipelineStatus(mr.HeadPipeline)
+
+		// Check if we already have a record for this MR
+		prev, exists := s.mrStates[mr.ID]
+		if exists && !s.isFirstFetch && conf.Notifications.Enabled {
+			// 1. Check if MR's head pipeline status changed
+			if prev.PipelineStatus != newPipelineStatus && newPipelineStatus != "" {
+				if newPipelineStatus == "success" && conf.Notifications.PipelineSuccess {
+					_ = s.trayService.Notify("MR Pipeline Passed", fmt.Sprintf("Pipeline passed for MR !%d: %s", mr.IID, mr.Title))
+				} else if newPipelineStatus == "failed" && conf.Notifications.PipelineFailed {
+					_ = s.trayService.Notify("MR Pipeline Failed", fmt.Sprintf("Pipeline failed for MR !%d: %s", mr.IID, mr.Title))
+				}
+			}
+		}
+
+		// Save the current state of the MR
+		s.mrStates[mr.ID] = mrState{
+			ID:             mr.ID,
+			IID:            mr.IID,
+			ProjectID:      mr.ProjectID,
+			Title:          mr.Title,
+			State:          mr.State,
+			PipelineStatus: newPipelineStatus,
+		}
+
 		if !s.seenMRIDs[mr.ID] {
 			s.seenMRIDs[mr.ID] = true
 			if !s.isFirstFetch && conf.Notifications.Enabled {
@@ -369,8 +443,46 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 					_ = s.trayService.Notify("Review Request", fmt.Sprintf("You are requested to review: %s", mr.Title))
 				} else if isAssignee && conf.Notifications.MRAssigned {
 					_ = s.trayService.Notify("MR Assigned", fmt.Sprintf("Merge Request assigned to you: %s", mr.Title))
+				} else {
+					_ = s.trayService.Notify("New Merge Request", fmt.Sprintf("New Merge Request !%d: %s", mr.IID, mr.Title))
 				}
 			}
+		}
+	}
+
+	// 7. Check for closed/merged MRs asynchronously
+	currentMRIDs := make(map[int]bool)
+	for _, mr := range mrs {
+		currentMRIDs[mr.ID] = true
+	}
+
+	for oldID, oldState := range s.mrStates {
+		if !currentMRIDs[oldID] && oldState.State == "opened" {
+			// This MR is no longer returned in the open list. Query its latest state in a background goroutine.
+			go func(oState mrState, cl *gitlab.Client) {
+				detailed, err := cl.GetSingleMergeRequest(oState.ProjectID, oState.IID)
+				if err == nil && detailed != nil {
+					s.stateMu.Lock()
+					s.mrStates[detailed.ID] = mrState{
+						ID:             detailed.ID,
+						IID:            detailed.IID,
+						ProjectID:      detailed.ProjectID,
+						Title:          detailed.Title,
+						State:          detailed.State,
+						PipelineStatus: getPipelineStatus(detailed.HeadPipeline),
+					}
+					s.stateMu.Unlock()
+
+					if !s.isFirstFetch && conf.Notifications.Enabled {
+						switch detailed.State {
+						case "merged":
+							_ = s.trayService.Notify("MR Merged", fmt.Sprintf("Merge Request !%d was merged: %s", detailed.IID, oState.Title))
+						case "closed":
+							_ = s.trayService.Notify("MR Closed", fmt.Sprintf("Merge Request !%d was closed: %s", detailed.IID, oState.Title))
+						}
+					}
+				}
+			}(oldState, client)
 		}
 	}
 
@@ -425,7 +537,11 @@ func (s *AppService) MergeMergeRequest(projectID int, mrIID int) error {
 	}
 
 	client := s.getGitLabClient(conf)
-	return client.MergeMergeRequest(projectID, mrIID)
+	err = client.MergeMergeRequest(projectID, mrIID)
+	if err == nil {
+		s.ClearTelemetryCache()
+	}
+	return err
 }
 
 // CloseMergeRequest updates the GitLab MR state to closed.
@@ -439,7 +555,11 @@ func (s *AppService) CloseMergeRequest(projectID int, mrIID int) error {
 	}
 
 	client := s.getGitLabClient(conf)
-	return client.CloseMergeRequest(projectID, mrIID)
+	err = client.CloseMergeRequest(projectID, mrIID)
+	if err == nil {
+		s.ClearTelemetryCache()
+	}
+	return err
 }
 
 // MarkTodoAsDone marks the pending todo as done.
@@ -453,7 +573,11 @@ func (s *AppService) MarkTodoAsDone(todoID int) error {
 	}
 
 	client := s.getGitLabClient(conf)
-	return client.MarkTodoAsDone(todoID)
+	err = client.MarkTodoAsDone(todoID)
+	if err == nil {
+		s.ClearTelemetryCache()
+	}
+	return err
 }
 
 // RetryPipeline retries a failed pipeline.
@@ -467,7 +591,11 @@ func (s *AppService) RetryPipeline(projectPath string, pipelineID int) error {
 	}
 
 	client := s.getGitLabClient(conf)
-	return client.RetryPipeline(projectPath, pipelineID)
+	err = client.RetryPipeline(projectPath, pipelineID)
+	if err == nil {
+		s.ClearTelemetryCache()
+	}
+	return err
 }
 
 // CancelPipeline cancels a running pipeline.
@@ -481,7 +609,11 @@ func (s *AppService) CancelPipeline(projectPath string, pipelineID int) error {
 	}
 
 	client := s.getGitLabClient(conf)
-	return client.CancelPipeline(projectPath, pipelineID)
+	err = client.CancelPipeline(projectPath, pipelineID)
+	if err == nil {
+		s.ClearTelemetryCache()
+	}
+	return err
 }
 
 // TriggerTestNotification sends a test native notification.

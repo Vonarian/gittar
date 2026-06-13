@@ -119,6 +119,22 @@
     })
   );
 
+  const activeTodos = $derived(
+    filteredTodos.filter((t) => !recentlyDoneTodos.some((rd) => rd.id === t.id))
+  );
+
+  const isFilterActive = $derived(
+    searchQuery !== "" ||
+    groupFilter !== "all" ||
+    projectFilter !== "all" ||
+    actionFilter !== "all" ||
+    userFilter !== "all"
+  );
+
+  $effect(() => {
+    recentlyDoneTodos = recentlyDoneTodos.filter((rd) => todos.some((t) => t.id === rd.id));
+  });
+
   function resetFilters() {
     searchQuery = "";
     groupFilter = "all";
@@ -333,7 +349,7 @@
 
   <!-- Content Area -->
   <div class="flex-1 overflow-hidden relative">
-    {#if todos.length === 0}
+    {#if activeTodos.length === 0 && !isFilterActive}
       <!-- Premium Inbox Zero State -->
       <div class="h-[70%] flex flex-col items-center justify-center text-center">
         <div class="w-12 h-12 rounded-full bg-indigo-950/40 border border-indigo-900/50 flex items-center justify-center text-indigo-400 mb-4 animate-pulse-glow">
@@ -344,7 +360,7 @@
         <h3 class="text-base font-semibold text-slate-200">Inbox Zero</h3>
         <p class="text-slate-500 text-sm mt-1 max-w-[280px]">You are completely caught up! No pending todos on your queue.</p>
       </div>
-    {:else if filteredTodos.length === 0 && viewMode === "list"}
+    {:else if activeTodos.length === 0 && isFilterActive && viewMode === "list"}
       <!-- Empty Filter State -->
       <div class="h-[70%] flex flex-col items-center justify-center text-center">
         <div class="w-12 h-12 rounded-full bg-slate-950/40 border border-slate-900 flex items-center justify-center text-slate-500 mb-4">
@@ -364,7 +380,7 @@
     {:else if viewMode === "list"}
       <!-- High Density List -->
       <div class="h-full overflow-y-auto p-6 space-y-2.5">
-        {#each filteredTodos as todo (todo.id)}
+        {#each activeTodos as todo (todo.id)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             oncontextmenu={(e) => handleContextMenu(e, todo.target_url)}
@@ -461,18 +477,18 @@
               <h3 class="font-bold text-slate-200 text-sm">Pending Inbox</h3>
             </div>
             <span class="px-2 py-0.5 text-xs font-semibold bg-indigo-500/10 text-indigo-400 rounded-full border border-indigo-500/20">
-              {filteredTodos.length}
+              {activeTodos.length}
             </span>
           </div>
 
           <div class="flex-1 overflow-y-auto space-y-3 pr-1">
-            {#if filteredTodos.length === 0}
+            {#if activeTodos.length === 0}
               <div class="h-32 flex flex-col items-center justify-center text-center text-slate-500 text-xs border border-dashed border-slate-800/80 rounded-xl bg-slate-950/5">
                 No pending items.
               </div>
             {/if}
 
-            {#each filteredTodos as todo (todo.id)}
+            {#each activeTodos as todo (todo.id)}
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 draggable="true"
