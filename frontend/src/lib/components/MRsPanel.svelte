@@ -52,7 +52,12 @@
       } else {
         localMRs[idx].closed_at = new Date().toISOString();
       }
-      startMRTimer(mrId, 5000);
+      if (document.hasFocus()) {
+        startMRTimer(mrId, 5000);
+      } else {
+        localMRs[idx]._glowActive = true;
+        localMRs[idx]._isFadingOut = false;
+      }
     }
   }
 
@@ -123,6 +128,15 @@
     timer.lastTick = Date.now();
     timer.paused = false;
     timer.timeoutId = setTimeout(() => handleTimerExpiry(mrId), timer.timeLeft);
+  }
+
+  function handleWindowFocus() {
+    console.log("[MRsPanel] Window focused, checking for pending transition timers...");
+    for (const mr of localMRs) {
+      if ((mr.state === "merged" || mr.state === "closed") && mr._glowActive && !mrTimers.has(mr.id)) {
+        startMRTimer(mr.id, 5000);
+      }
+    }
   }
 
   function syncMRs(newMRs: MergeRequest[]) {
@@ -355,10 +369,25 @@
     })
   );
 
+  const sortedFilteredMRs = $derived(
+    [...filteredMRs].sort((a, b) => {
+      const aFlashing = a.state === "merged" || a.state === "closed";
+      const bFlashing = b.state === "merged" || b.state === "closed";
+      if (aFlashing && !bFlashing) return -1;
+      if (!aFlashing && bFlashing) return 1;
+      if (aFlashing && bFlashing) {
+        const aTime = new Date(a.merged_at || a.closed_at || a.updated_at).getTime();
+        const bTime = new Date(b.merged_at || b.closed_at || b.updated_at).getTime();
+        return bTime - aTime;
+      }
+      return 0;
+    })
+  );
+
   // Kanban Derived Columns
-  const draftMRs = $derived(filteredMRs.filter((mr) => (mr.work_in_progress || mr.draft) && mr.state === "opened"));
+  const draftMRs = $derived(sortedFilteredMRs.filter((mr) => (mr.work_in_progress || mr.draft) && mr.state === "opened"));
   const reviewingMRs = $derived(
-    filteredMRs.filter(
+    sortedFilteredMRs.filter(
       (mr) =>
         !(mr.work_in_progress || mr.draft) &&
         mr.state === "opened" &&
@@ -366,15 +395,15 @@
     )
   );
   const inProgressMRs = $derived(
-    filteredMRs.filter(
+    sortedFilteredMRs.filter(
       (mr) =>
         !(mr.work_in_progress || mr.draft) &&
         mr.state === "opened" &&
         !(mr.reviewers || []).some((r) => r.username === username)
     )
   );
-  const mergedMRs = $derived(filteredMRs.filter((mr) => mr.state === "merged"));
-  const closedMRs = $derived(filteredMRs.filter((mr) => mr.state === "closed"));
+  const mergedMRs = $derived(sortedFilteredMRs.filter((mr) => mr.state === "merged"));
+  const closedMRs = $derived(sortedFilteredMRs.filter((mr) => mr.state === "closed"));
 
   function resetFilters() {
     searchQuery = "";
@@ -503,6 +532,8 @@
     }
   }
 </script>
+
+<svelte:window onfocus={handleWindowFocus} />
 
 <div class="h-full flex flex-col">
   <!-- Panel Header -->
@@ -665,15 +696,15 @@
         <h3 class="text-base font-semibold text-slate-200">No Merge Requests</h3>
         <p class="text-slate-500 text-sm mt-1 max-w-[280px]">No open merge requests found matching this filter.</p>
       </div>
-    {:else if filteredMRs.length === 0 && viewMode === "list"}
+    {:else if sortedFilteredMRs.length === 0 && viewMode === "list"}
       <!-- Empty Filter State -->
       <div class="h-[70%] flex flex-col items-center justify-center text-center">
-        <div class="w-12 h-12 rounded-full bg-slate-950/40 border border-slate-900 flex items-center justify-center text-slate-500 mb-4">
+        <div class="w-12 h-12 rounded-full bg-slate-955/40 border border-slate-900 flex items-center justify-center text-slate-500 mb-4">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
           </svg>
         </div>
-        <h3 class="text-base font-semibold text-slate-350">No Results Found</h3>
+        <h3 class="text-base font-semibold text-slate-355">No Results Found</h3>
         <p class="text-slate-500 text-sm mt-1 max-w-[280px]">No merge requests match your filter criteria. Try resetting or adjusting your search.</p>
         <button
           onclick={resetFilters}
@@ -684,7 +715,7 @@
       </div>
     {:else if viewMode === "list"}
       <div class="h-full overflow-y-auto p-6 space-y-3">
-        {#each filteredMRs as mr (mr.id)}
+        {#each sortedFilteredMRs as mr (mr.id)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
