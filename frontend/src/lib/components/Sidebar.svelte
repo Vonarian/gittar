@@ -7,6 +7,7 @@
     runningPipelines: number;
     failedPipelines: number;
     mrsCount: number;
+    issuesCount: number;
     username: string;
     avatarUrl: string;
     syncError: string;
@@ -20,6 +21,7 @@
     runningPipelines,
     failedPipelines,
     mrsCount,
+    issuesCount,
     username,
     avatarUrl,
     syncError,
@@ -129,7 +131,7 @@
       <!-- MRs -->
       <button
         onclick={() => onSelectTab("mrs")}
-        class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'mrs' ? 'bg-indigo-600/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
+        class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'mrs' ? 'bg-indigo-650/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
       >
         <div class="flex items-center space-x-2.5">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,6 +142,24 @@
         {#if mrsCount > 0}
           <span class="px-2 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">
             {mrsCount}
+          </span>
+        {/if}
+      </button>
+
+      <!-- Issues -->
+      <button
+        onclick={() => onSelectTab("issues")}
+        class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'issues' ? 'bg-indigo-650/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
+      >
+        <div class="flex items-center space-x-2.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Issues Tracker</span>
+        </div>
+        {#if issuesCount > 0}
+          <span class="px-2 py-0.5 text-xs font-semibold bg-sky-500/10 text-sky-400 rounded-full border border-sky-500/20">
+            {issuesCount}
           </span>
         {/if}
       </button>

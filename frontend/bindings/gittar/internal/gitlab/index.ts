@@ -3,6 +3,7 @@
 
 export {
     HeadPipeline,
+    Issue,
     Job,
     MergeRequest,
     Pipeline,

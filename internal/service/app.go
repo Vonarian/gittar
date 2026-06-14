@@ -235,9 +235,10 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	var wg sync.WaitGroup
 	var todos []gitlab.Todo
 	var userMRs []gitlab.MergeRequest
-	var todosErr, userMRsErr error
+	var userIssues []gitlab.Issue
+	var todosErr, userMRsErr, userIssuesErr error
 
-	wg.Add(2)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		todos, todosErr = client.GetTodos()
@@ -246,13 +247,20 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		defer wg.Done()
 		userMRs, userMRsErr = client.GetMergeRequests(user.ID)
 	}()
+	go func() {
+		defer wg.Done()
+		userIssues, userIssuesErr = client.GetIssues(user.ID)
+	}()
 
-	// Fetch project-level pipelines and open MRs concurrently
+	// Fetch project-level pipelines, open MRs, and open issues concurrently
 	var pipeMu sync.Mutex
 	pipelines := make([]gitlab.PipelineWithJobs, 0)
 
 	var projMRsMu sync.Mutex
 	var projMRs []gitlab.MergeRequest
+
+	var projIssuesMu sync.Mutex
+	var projIssues []gitlab.Issue
 
 	for projectPath := range dedupProjects {
 		// Fetch pipelines
@@ -278,6 +286,18 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 				projMRsMu.Unlock()
 			}
 		}(projectPath)
+
+		// Fetch project-level open issues
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+			issues, err := client.GetProjectIssues(path)
+			if err == nil && len(issues) > 0 {
+				projIssuesMu.Lock()
+				projIssues = append(projIssues, issues...)
+				projIssuesMu.Unlock()
+			}
+		}(projectPath)
 	}
 
 	// Wait for all fetches to complete
@@ -288,6 +308,9 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	}
 	if userMRsErr != nil {
 		return nil, fmt.Errorf("failed to fetch merge requests: %w", userMRsErr)
+	}
+	if userIssuesErr != nil {
+		return nil, fmt.Errorf("failed to fetch issues: %w", userIssuesErr)
 	}
 
 	// Deduplicate MRs between user-involved MRs and project-level MRs
@@ -309,6 +332,27 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	// Sort merge requests by UpdatedAt descending (most recently updated first)
 	sort.Slice(finalMRs, func(i, j int) bool {
 		return finalMRs[i].UpdatedAt.After(finalMRs[j].UpdatedAt)
+	})
+
+	// Deduplicate Issues between user-involved Issues and project-level Issues
+	issueMap := make(map[int]gitlab.Issue)
+	for _, issue := range userIssues {
+		issueMap[issue.ID] = issue
+	}
+	for _, issue := range projIssues {
+		if _, exists := issueMap[issue.ID]; !exists {
+			issueMap[issue.ID] = issue
+		}
+	}
+
+	finalIssues := make([]gitlab.Issue, 0, len(issueMap))
+	for _, issue := range issueMap {
+		finalIssues = append(finalIssues, issue)
+	}
+
+	// Sort issues by UpdatedAt descending (most recently updated first)
+	sort.Slice(finalIssues, func(i, j int) bool {
+		return finalIssues[i].UpdatedAt.After(finalIssues[j].UpdatedAt)
 	})
 
 	// Sort pipelines alphabetically by projectName/path, and then by pipeline ID descending to keep newest first
@@ -547,6 +591,7 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		Todos:         todos,
 		Pipelines:     pipelines,
 		MergeRequests: finalMRs,
+		Issues:        finalIssues,
 		Username:      user.Username,
 		AvatarURL:     user.AvatarURL,
 	}
@@ -601,6 +646,24 @@ func (s *AppService) CloseMergeRequest(projectID int, mrIID int) error {
 
 	client := s.getGitLabClient(conf)
 	err = client.CloseMergeRequest(projectID, mrIID)
+	if err == nil {
+		s.ClearTelemetryCache()
+	}
+	return err
+}
+
+// CloseIssue updates the GitLab Issue state to closed.
+func (s *AppService) CloseIssue(projectID int, issueIID int) error {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return err
+	}
+	if conf.Token == "" {
+		return fmt.Errorf("GitLab token not configured")
+	}
+
+	client := s.getGitLabClient(conf)
+	err = client.CloseIssue(projectID, issueIID)
 	if err == nil {
 		s.ClearTelemetryCache()
 	}
