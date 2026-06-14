@@ -741,4 +741,64 @@ func (s *AppService) ClearTelemetryCache() {
 	}
 }
 
+// GetMergeRequestCommits fetches commits for a merge request.
+func (s *AppService) GetMergeRequestCommits(projectID int, mrIID int) ([]gitlab.Commit, error) {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	if conf.Token == "" {
+		return nil, fmt.Errorf("GitLab token not configured")
+	}
+
+	client := s.getGitLabClient(conf)
+	return client.GetMergeRequestCommits(projectID, mrIID)
+}
+
+// GetMergeRequestNotes fetches notes/comments for a merge request.
+func (s *AppService) GetMergeRequestNotes(projectID int, mrIID int) ([]gitlab.Note, error) {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	if conf.Token == "" {
+		return nil, fmt.Errorf("GitLab token not configured")
+	}
+
+	client := s.getGitLabClient(conf)
+	return client.GetMergeRequestNotes(projectID, mrIID)
+}
+
+// CreateMergeRequestNote adds a comment to a merge request and clears the client cache to force fresh fetching.
+func (s *AppService) CreateMergeRequestNote(projectID int, mrIID int, body string) (*gitlab.Note, error) {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	if conf.Token == "" {
+		return nil, fmt.Errorf("GitLab token not configured")
+	}
+
+	client := s.getGitLabClient(conf)
+	note, err := client.CreateMergeRequestNote(projectID, mrIID, body)
+	if err == nil {
+		s.ClearTelemetryCache()
+	}
+	return note, err
+}
+
+// GetSingleMergeRequest fetches detailed information for a single MR from GitLab.
+func (s *AppService) GetSingleMergeRequest(projectID int, mrIID int) (*gitlab.MergeRequest, error) {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	if conf.Token == "" {
+		return nil, fmt.Errorf("GitLab token not configured")
+	}
+
+	client := s.getGitLabClient(conf)
+	return client.GetSingleMergeRequest(projectID, mrIID, time.Time{})
+}
+
 

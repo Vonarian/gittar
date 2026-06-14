@@ -477,4 +477,87 @@ func TestGetSingleMergeRequest_DynamicTTL(t *testing.T) {
 	}
 }
 
+func TestGetMergeRequestCommits(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/10/merge_requests/101/commits" {
+			t.Errorf("expected path /api/v4/projects/10/merge_requests/101/commits, got %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("per_page") != "100" {
+			t.Errorf("expected per_page=100 query param, got %s", r.URL.Query().Get("per_page"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[
+			{"id": "c1", "short_id": "c1s", "title": "Commit 1", "message": "Commit msg 1", "author_name": "Author 1", "author_email": "auth1@ex.com", "web_url": "http://ex.com/c1"}
+		]`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token", nil)
+	commits, err := client.GetMergeRequestCommits(10, 101)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(commits) != 1 || commits[0].ID != "c1" || commits[0].Title != "Commit 1" {
+		t.Errorf("unexpected commits: %v", commits)
+	}
+}
+
+func TestGetMergeRequestNotes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/10/merge_requests/101/notes" {
+			t.Errorf("expected path /api/v4/projects/10/merge_requests/101/notes, got %s", r.URL.Path)
+		}
+		query := r.URL.Query()
+		if query.Get("sort") != "asc" || query.Get("per_page") != "100" {
+			t.Errorf("expected sort=asc and per_page=100, got sort=%s per_page=%s", query.Get("sort"), query.Get("per_page"))
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`[
+			{"id": 1, "body": "Comment 1", "system": false, "author": {"id": 2, "name": "User 2", "username": "user2"}}
+		]`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token", nil)
+	notes, err := client.GetMergeRequestNotes(10, 101)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(notes) != 1 || notes[0].ID != 1 || notes[0].Body != "Comment 1" || notes[0].Author.Username != "user2" {
+		t.Errorf("unexpected notes: %v", notes)
+	}
+}
+
+func TestCreateMergeRequestNote(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/projects/10/merge_requests/101/notes" {
+			t.Errorf("expected path /api/v4/projects/10/merge_requests/101/notes, got %s", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"id": 5, "body": "Hello world", "system": false, "author": {"id": 1, "username": "admin"}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token", nil)
+	note, err := client.CreateMergeRequestNote(10, 101, "Hello world")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if note == nil || note.ID != 5 || note.Body != "Hello world" || note.Author.Username != "admin" {
+		t.Errorf("unexpected note: %v", note)
+	}
+}
+
 

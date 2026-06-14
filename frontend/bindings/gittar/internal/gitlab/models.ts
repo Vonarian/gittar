@@ -10,6 +10,58 @@ import { Create as $Create } from "@wailsio/runtime";
 import * as time$0 from "../../../time/models.js";
 
 /**
+ * Commit represents a GitLab commit.
+ */
+export class Commit {
+    "id": string;
+    "short_id": string;
+    "title": string;
+    "message": string;
+    "author_name": string;
+    "author_email": string;
+    "authored_date": time$0.Time;
+    "web_url": string;
+
+    /** Creates a new Commit instance. */
+    constructor($$source: Partial<Commit> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("short_id" in $$source)) {
+            this["short_id"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("message" in $$source)) {
+            this["message"] = "";
+        }
+        if (!("author_name" in $$source)) {
+            this["author_name"] = "";
+        }
+        if (!("author_email" in $$source)) {
+            this["author_email"] = "";
+        }
+        if (!("authored_date" in $$source)) {
+            this["authored_date"] = null;
+        }
+        if (!("web_url" in $$source)) {
+            this["web_url"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Commit instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Commit {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Commit($$parsedSource as Partial<Commit>);
+    }
+}
+
+/**
  * HeadPipeline represents the pipeline for the head commit of a Merge Request.
  */
 export class HeadPipeline {
@@ -307,6 +359,54 @@ export class MergeRequest {
             $$parsedSource["head_pipeline"] = $$createField18_0($$parsedSource["head_pipeline"]);
         }
         return new MergeRequest($$parsedSource as Partial<MergeRequest>);
+    }
+}
+
+/**
+ * Note represents a GitLab comment or activity.
+ */
+export class Note {
+    "id": number;
+    "body": string;
+    "author": User;
+    "created_at": time$0.Time;
+    "updated_at": time$0.Time;
+    "system": boolean;
+
+    /** Creates a new Note instance. */
+    constructor($$source: Partial<Note> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("body" in $$source)) {
+            this["body"] = "";
+        }
+        if (!("author" in $$source)) {
+            this["author"] = (new User());
+        }
+        if (!("created_at" in $$source)) {
+            this["created_at"] = null;
+        }
+        if (!("updated_at" in $$source)) {
+            this["updated_at"] = null;
+        }
+        if (!("system" in $$source)) {
+            this["system"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Note instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Note {
+        const $$createField2_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("author" in $$parsedSource) {
+            $$parsedSource["author"] = $$createField2_0($$parsedSource["author"]);
+        }
+        return new Note($$parsedSource as Partial<Note>);
     }
 }
 
