@@ -32,6 +32,13 @@ export function ClearTelemetryCache(): $CancellablePromise<void> {
 }
 
 /**
+ * CloseIssue updates the GitLab Issue state to closed.
+ */
+export function CloseIssue(projectID: number, issueIID: number): $CancellablePromise<void> {
+    return $Call.ByID(858566815, projectID, issueIID);
+}
+
+/**
  * CloseMergeRequest updates the GitLab MR state to closed.
  */
 export function CloseMergeRequest(projectID: number, mrIID: number): $CancellablePromise<void> {

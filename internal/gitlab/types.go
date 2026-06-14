@@ -94,6 +94,26 @@ type MergeRequest struct {
 	ClosedAt       *time.Time    `json:"closed_at,omitempty"`
 }
 
+// Issue represents a GitLab Issue.
+type Issue struct {
+	ID             int        `json:"id"`
+	IID            int        `json:"iid"`
+	ProjectID      int        `json:"project_id"`
+	Title          string     `json:"title"`
+	Description    string     `json:"description"`
+	State          string     `json:"state"`
+	Author         User       `json:"author"`
+	Assignees      []User     `json:"assignees"`
+	Labels         []string   `json:"labels"`
+	WebURL         string     `json:"web_url"`
+	UserNotesCount int        `json:"user_notes_count"`
+	Upvotes        int        `json:"upvotes"`
+	Downvotes      int        `json:"downvotes"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	ClosedAt       *time.Time `json:"closed_at,omitempty"`
+}
+
 // PipelineWithJobs bundles a pipeline with its current jobs and project context.
 type PipelineWithJobs struct {
 	Pipeline    Pipeline `json:"pipeline"`
@@ -107,6 +127,7 @@ type TelemetryPayload struct {
 	Todos         []Todo             `json:"todos"`
 	Pipelines     []PipelineWithJobs `json:"pipelines"`
 	MergeRequests []MergeRequest     `json:"mergeRequests"`
+	Issues        []Issue            `json:"issues"`
 	Username      string             `json:"username"`
 	AvatarURL     string             `json:"avatarUrl"`
 	Error         string             `json:"error,omitempty"`

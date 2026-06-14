@@ -6,6 +6,7 @@
   import TodosPanel from "./lib/components/TodosPanel.svelte";
   import PipelinesPanel from "./lib/components/PipelinesPanel.svelte";
   import MRsPanel from "./lib/components/MRsPanel.svelte";
+  import IssuesPanel from "./lib/components/IssuesPanel.svelte";
   import InspectorPanel from "./lib/components/InspectorPanel.svelte";
 
   import { FetchTelemetry, GetConfig, SaveConfig, GetCachedTelemetry } from "../bindings/gittar/internal/service/appservice";
@@ -38,6 +39,7 @@
   // Derived counts for Sidebar badges
   const todosCount = $derived(telemetry?.todos?.length || 0);
   const mrsCount = $derived(telemetry?.mergeRequests?.length || 0);
+  const issuesCount = $derived(telemetry?.issues?.length || 0);
   
   const failedPipelines = $derived(
     ignoreFailedPipelines
@@ -217,6 +219,7 @@
     {runningPipelines}
     {failedPipelines}
     {mrsCount}
+    {issuesCount}
     {username}
     {avatarUrl}
     syncError={errorMsg}
@@ -327,6 +330,12 @@
       {:else if currentTab === "mrs"}
         <MRsPanel
           mergeRequests={telemetry?.mergeRequests || []}
+          {username}
+          onRefresh={() => fetchTelemetryData(true)}
+        />
+      {:else if currentTab === "issues"}
+        <IssuesPanel
+          issues={telemetry?.issues || []}
           {username}
           onRefresh={() => fetchTelemetryData(true)}
         />

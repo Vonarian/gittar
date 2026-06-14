@@ -80,11 +80,19 @@ func TestPipelineTransitions(t *testing.T) {
 			_, _ = w.Write([]byte(`[]`))
 			return
 		}
+		if strings.HasPrefix(path, "/api/v4/issues") {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
 		if path == "/api/v4/projects/group/project1" {
 			_, _ = w.Write([]byte(`{"id": 1, "name": "project1", "path_with_namespace": "group/project1"}`))
 			return
 		}
 		if path == "/api/v4/projects/group/project1/merge_requests" {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/issues" {
 			_, _ = w.Write([]byte(`[]`))
 			return
 		}
@@ -209,5 +217,128 @@ func TestPipelineTransitions(t *testing.T) {
 	}
 	if len(notifier.alerts) != 1 || !strings.Contains(notifier.alerts[0], "Pipeline Passed") {
 		t.Errorf("expected 1 'Pipeline Passed' alert for feature branch, got %v", notifier.alerts)
+	}
+}
+
+func TestIssues(t *testing.T) {
+	// Set up temporary config directory
+	tmpDir, err := os.MkdirTemp("", "gittar-issues-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	// Override HOME environment variable to isolate config dir
+	oldHome := os.Getenv("HOME")
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+	}()
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("failed to set HOME env var: %v", err)
+	}
+
+	// Create a valid config file
+	conf := &config.Config{
+		GitLabURL:         "http://example.com",
+		Token:             "mock-token",
+		MonitoredProjects: []string{"group/project1"},
+	}
+	err = config.SaveConfig(conf)
+	if err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	var issueClosed bool
+
+	// Mock server
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+
+		if path == "/api/v4/user" {
+			_, _ = w.Write([]byte(`{"id": 5, "username": "testuser"}`))
+			return
+		}
+		if path == "/api/v4/todos" {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		if strings.HasPrefix(path, "/api/v4/merge_requests") {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1" {
+			_, _ = w.Write([]byte(`{"id": 1, "name": "project1", "path_with_namespace": "group/project1"}`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/merge_requests" {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/pipelines" {
+			_, _ = w.Write([]byte(`[]`))
+			return
+		}
+		if path == "/api/v4/issues" {
+			_, _ = w.Write([]byte(`[{"id": 10, "iid": 100, "project_id": 1, "title": "User Issue 1", "state": "opened", "web_url": "http://example.com/group/project1/-/issues/100"}]`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/issues" {
+			_, _ = w.Write([]byte(`[{"id": 11, "iid": 101, "project_id": 1, "title": "Project Issue 1", "state": "opened", "web_url": "http://example.com/group/project1/-/issues/101"}]`))
+			return
+		}
+		if path == "/api/v4/projects/1/issues/100" && r.Method == "PUT" {
+			issueClosed = true
+			_, _ = w.Write([]byte(`{"id": 10, "iid": 100, "project_id": 1, "title": "User Issue 1", "state": "closed"}`))
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	// Update config to use the mock server URL
+	conf.GitLabURL = server.URL
+	_ = config.SaveConfig(conf)
+
+	// Create AppService
+	appService := NewAppService()
+
+	appService.ClearTelemetryCache()
+	payload, err := appService.FetchTelemetry()
+	if err != nil {
+		t.Fatalf("unexpected fetch error: %v", err)
+	}
+
+	if len(payload.Issues) != 2 {
+		t.Errorf("expected 2 issues, got %d", len(payload.Issues))
+	}
+
+	// Verify details of the first issue
+	foundUserIssue := false
+	foundProjIssue := false
+	for _, issue := range payload.Issues {
+		if issue.Title == "User Issue 1" {
+			foundUserIssue = true
+		}
+		if issue.Title == "Project Issue 1" {
+			foundProjIssue = true
+		}
+	}
+
+	if !foundUserIssue || !foundProjIssue {
+		t.Errorf("did not find expected issues: user_issue=%t, proj_issue=%t", foundUserIssue, foundProjIssue)
+	}
+
+	// Test closing the issue
+	err = appService.CloseIssue(1, 100)
+	if err != nil {
+		t.Fatalf("failed to close issue: %v", err)
+	}
+
+	if !issueClosed {
+		t.Errorf("issue was not marked closed on mock server")
 	}
 }

@@ -600,6 +600,71 @@ func (c *Client) CancelPipeline(projectPath string, pipelineID int) error {
 	return err
 }
 
+// GetIssues fetches issues authored by or assigned to the user.
+func (c *Client) GetIssues(userID int) ([]Issue, error) {
+	// Fetch assigned issues
+	assignedData, _, err := c.doRequest("issues?state=opened&scope=assigned_to_me&per_page=50")
+	if err != nil {
+		return nil, err
+	}
+
+	var assigned []Issue
+	if err := json.Unmarshal(assignedData, &assigned); err != nil {
+		return nil, err
+	}
+
+	// Fetch authored issues
+	authoredData, _, err := c.doRequest("issues?state=opened&scope=created_by_me&per_page=50")
+	if err != nil {
+		return nil, err
+	}
+
+	var authored []Issue
+	if err := json.Unmarshal(authoredData, &authored); err != nil {
+		return nil, err
+	}
+
+	// Merge & Deduplicate
+	issueMap := make(map[int]Issue)
+	for _, issue := range assigned {
+		issueMap[issue.ID] = issue
+	}
+	for _, issue := range authored {
+		issueMap[issue.ID] = issue
+	}
+
+	result := make([]Issue, 0, len(issueMap))
+	for _, issue := range issueMap {
+		result = append(result, issue)
+	}
+
+	return result, nil
+}
+
+// GetProjectIssues fetches open issues for a project.
+func (c *Client) GetProjectIssues(projectIDOrPath string) ([]Issue, error) {
+	escapedPath := url.PathEscape(projectIDOrPath)
+	data, _, err := c.doRequest(fmt.Sprintf("projects/%s/issues?state=opened&per_page=50", escapedPath))
+	if err != nil {
+		return nil, err
+	}
+
+	var issues []Issue
+	if err := json.Unmarshal(data, &issues); err != nil {
+		return nil, err
+	}
+
+	return issues, nil
+}
+
+// CloseIssue updates the issue state to closed.
+func (c *Client) CloseIssue(projectID int, issueIID int) error {
+	path := fmt.Sprintf("projects/%d/issues/%d", projectID, issueIID)
+	body := map[string]string{"state_event": "close"}
+	_, err := c.doWriteRequest("PUT", path, body)
+	return err
+}
+
 // ClearCache flushes all cached HTTP responses.
 func (c *Client) ClearCache() {
 	c.cacheMu.Lock()
