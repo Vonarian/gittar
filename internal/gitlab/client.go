@@ -724,3 +724,49 @@ func (c *Client) ClearCache() {
 	c.cache = make(map[string]*cacheEntry)
 }
 
+// GetMergeRequestCommits fetches up to 100 commits in a merge request.
+func (c *Client) GetMergeRequestCommits(projectID int, mrIID int) ([]Commit, error) {
+	path := fmt.Sprintf("projects/%d/merge_requests/%d/commits?per_page=100", projectID, mrIID)
+	data, _, err := c.doRequest(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var commits []Commit
+	if err := json.Unmarshal(data, &commits); err != nil {
+		return nil, err
+	}
+	return commits, nil
+}
+
+// GetMergeRequestNotes fetches comments/activity for a merge request.
+func (c *Client) GetMergeRequestNotes(projectID int, mrIID int) ([]Note, error) {
+	path := fmt.Sprintf("projects/%d/merge_requests/%d/notes?sort=asc&per_page=100", projectID, mrIID)
+	data, _, err := c.doRequest(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var notes []Note
+	if err := json.Unmarshal(data, &notes); err != nil {
+		return nil, err
+	}
+	return notes, nil
+}
+
+// CreateMergeRequestNote adds a new comment to a merge request.
+func (c *Client) CreateMergeRequestNote(projectID int, mrIID int, body string) (*Note, error) {
+	path := fmt.Sprintf("projects/%d/merge_requests/%d/notes", projectID, mrIID)
+	reqBody := map[string]string{"body": body}
+	data, err := c.doWriteRequest("POST", path, reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	var note Note
+	if err := json.Unmarshal(data, &note); err != nil {
+		return nil, err
+	}
+	return &note, nil
+}
+

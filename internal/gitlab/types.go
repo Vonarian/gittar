@@ -94,6 +94,28 @@ type MergeRequest struct {
 	ClosedAt       *time.Time    `json:"closed_at,omitempty"`
 }
 
+// Commit represents a GitLab commit.
+type Commit struct {
+	ID           string    `json:"id"`
+	ShortID      string    `json:"short_id"`
+	Title        string    `json:"title"`
+	Message      string    `json:"message"`
+	AuthorName   string    `json:"author_name"`
+	AuthorEmail  string    `json:"author_email"`
+	AuthoredDate time.Time `json:"authored_date"`
+	WebURL       string    `json:"web_url"`
+}
+
+// Note represents a GitLab comment or activity.
+type Note struct {
+	ID        int       `json:"id"`
+	Body      string    `json:"body"`
+	Author    User      `json:"author"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	System    bool      `json:"system"`
+}
+
 // Issue represents a GitLab Issue.
 type Issue struct {
 	ID             int        `json:"id"`

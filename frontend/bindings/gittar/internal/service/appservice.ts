@@ -46,11 +46,20 @@ export function CloseMergeRequest(projectID: number, mrIID: number): $Cancellabl
 }
 
 /**
+ * CreateMergeRequestNote adds a comment to a merge request and clears the client cache to force fresh fetching.
+ */
+export function CreateMergeRequestNote(projectID: number, mrIID: number, body: string): $CancellablePromise<gitlab$0.Note | null> {
+    return $Call.ByID(3045205465, projectID, mrIID, body).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
  * FetchTelemetry fetches all telemetry data concurrently.
  */
 export function FetchTelemetry(): $CancellablePromise<gitlab$0.TelemetryPayload | null> {
     return $Call.ByID(843013167).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType3($result);
     });
 }
 
@@ -59,7 +68,7 @@ export function FetchTelemetry(): $CancellablePromise<gitlab$0.TelemetryPayload 
  */
 export function GetCachedTelemetry(): $CancellablePromise<gitlab$0.TelemetryPayload | null> {
     return $Call.ByID(3892731397).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType3($result);
     });
 }
 
@@ -68,7 +77,7 @@ export function GetCachedTelemetry(): $CancellablePromise<gitlab$0.TelemetryPayl
  */
 export function GetConfig(): $CancellablePromise<config$0.Config | null> {
     return $Call.ByID(3673826530).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType5($result);
     });
 }
 
@@ -77,6 +86,33 @@ export function GetConfig(): $CancellablePromise<config$0.Config | null> {
  */
 export function GetJobLogSnippet(projectIDOrPath: string, jobID: number): $CancellablePromise<string> {
     return $Call.ByID(3512261036, projectIDOrPath, jobID);
+}
+
+/**
+ * GetMergeRequestCommits fetches commits for a merge request.
+ */
+export function GetMergeRequestCommits(projectID: number, mrIID: number): $CancellablePromise<gitlab$0.Commit[]> {
+    return $Call.ByID(3049906921, projectID, mrIID).then(($result: any) => {
+        return $$createType7($result);
+    });
+}
+
+/**
+ * GetMergeRequestNotes fetches notes/comments for a merge request.
+ */
+export function GetMergeRequestNotes(projectID: number, mrIID: number): $CancellablePromise<gitlab$0.Note[]> {
+    return $Call.ByID(1523195622, projectID, mrIID).then(($result: any) => {
+        return $$createType8($result);
+    });
+}
+
+/**
+ * GetSingleMergeRequest fetches detailed information for a single MR from GitLab.
+ */
+export function GetSingleMergeRequest(projectID: number, mrIID: number): $CancellablePromise<gitlab$0.MergeRequest | null> {
+    return $Call.ByID(3571403013, projectID, mrIID).then(($result: any) => {
+        return $$createType10($result);
+    });
 }
 
 /**
@@ -115,7 +151,14 @@ export function TriggerTestNotification(): $CancellablePromise<void> {
 }
 
 // Private type creation functions
-const $$createType0 = gitlab$0.TelemetryPayload.createFrom;
+const $$createType0 = gitlab$0.Note.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = config$0.Config.createFrom;
+const $$createType2 = gitlab$0.TelemetryPayload.createFrom;
 const $$createType3 = $Create.Nullable($$createType2);
+const $$createType4 = config$0.Config.createFrom;
+const $$createType5 = $Create.Nullable($$createType4);
+const $$createType6 = gitlab$0.Commit.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = $Create.Array($$createType0);
+const $$createType9 = gitlab$0.MergeRequest.createFrom;
+const $$createType10 = $Create.Nullable($$createType9);

@@ -342,3 +342,96 @@ func TestIssues(t *testing.T) {
 		t.Errorf("issue was not marked closed on mock server")
 	}
 }
+
+func TestMergeRequestDetailsAndActions(t *testing.T) {
+	// Set up temporary config directory
+	tmpDir, err := os.MkdirTemp("", "gittar-app-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	oldHome := os.Getenv("HOME")
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+	}()
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("failed to set HOME: %v", err)
+	}
+
+	conf := &config.Config{
+		GitLabURL: "http://example.com",
+		Token:     "mock-token",
+	}
+	_ = config.SaveConfig(conf)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if path == "/api/v4/projects/10/merge_requests/101/commits" {
+			_, _ = w.Write([]byte(`[{"id": "c1", "short_id": "c1s", "title": "Commit 1"}]`))
+			return
+		}
+		if path == "/api/v4/projects/10/merge_requests/101/notes" {
+			if r.Method == "POST" {
+				_, _ = w.Write([]byte(`{"id": 5, "body": "Created Note"}`))
+			} else {
+				_, _ = w.Write([]byte(`[{"id": 1, "body": "Comment 1"}]`))
+			}
+			return
+		}
+		if path == "/api/v4/projects/10/merge_requests/101" {
+			_, _ = w.Write([]byte(`{"id": 1, "iid": 101, "project_id": 10, "title": "Detailed MR"}`))
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	conf.GitLabURL = server.URL
+	_ = config.SaveConfig(conf)
+
+	appService := NewAppService()
+
+	// 1. GetCommits
+	commits, err := appService.GetMergeRequestCommits(10, 101)
+	if err != nil {
+		t.Fatalf("failed to get commits: %v", err)
+	}
+	if len(commits) != 1 || commits[0].Title != "Commit 1" {
+		t.Errorf("unexpected commits: %v", commits)
+	}
+
+	// 2. GetNotes
+	notes, err := appService.GetMergeRequestNotes(10, 101)
+	if err != nil {
+		t.Fatalf("failed to get notes: %v", err)
+	}
+	if len(notes) != 1 || notes[0].Body != "Comment 1" {
+		t.Errorf("unexpected notes: %v", notes)
+	}
+
+	// 3. CreateNote
+	note, err := appService.CreateMergeRequestNote(10, 101, "Created Note")
+	if err != nil {
+		t.Fatalf("failed to create note: %v", err)
+	}
+	if note == nil || note.Body != "Created Note" {
+		t.Errorf("unexpected note: %v", note)
+	}
+
+	// 4. GetSingleMergeRequest
+	mr, err := appService.GetSingleMergeRequest(10, 101)
+	if err != nil {
+		t.Fatalf("failed to get MR: %v", err)
+	}
+	if mr == nil || mr.Title != "Detailed MR" {
+		t.Errorf("unexpected MR: %v", mr)
+	}
+}
+

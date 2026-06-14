@@ -8,9 +8,10 @@
   import MRsPanel from "./lib/components/MRsPanel.svelte";
   import IssuesPanel from "./lib/components/IssuesPanel.svelte";
   import InspectorPanel from "./lib/components/InspectorPanel.svelte";
+  import MRInspectorPanel from "./lib/components/MRInspectorPanel.svelte";
 
   import { FetchTelemetry, GetConfig, SaveConfig, GetCachedTelemetry } from "../bindings/gittar/internal/service/appservice";
-  import type { TelemetryPayload } from "../bindings/gittar/internal/gitlab/models";
+  import type { TelemetryPayload, MergeRequest } from "../bindings/gittar/internal/gitlab/models";
 
   // Reactive state using Svelte 5 Runes
   let currentTab = $state("todos");
@@ -31,6 +32,15 @@
   let inspectorJobName = $state("");
   let inspectorJobId = $state(0);
   let inspectorProjectPath = $state("");
+
+  // MR Inspector Drawer State
+  let isMRInspectorOpen = $state(false);
+  let selectedMR = $state<MergeRequest | null>(null);
+
+  function handleSelectMR(mr: MergeRequest) {
+    selectedMR = mr;
+    isMRInspectorOpen = true;
+  }
 
   // Running polling timer reference
   let pollTimer: any = null;
@@ -332,6 +342,7 @@
           mergeRequests={telemetry?.mergeRequests || []}
           {username}
           onRefresh={() => fetchTelemetryData(true)}
+          onSelectMR={handleSelectMR}
         />
       {:else if currentTab === "issues"}
         <IssuesPanel
@@ -354,5 +365,14 @@
     jobId={inspectorJobId}
     projectPath={inspectorProjectPath}
     onClose={() => (isInspectorOpen = false)}
+  />
+
+  <!-- Sliding Drawer MR Inspector Panel -->
+  <MRInspectorPanel
+    isOpen={isMRInspectorOpen}
+    mr={selectedMR}
+    {username}
+    onClose={() => (isMRInspectorOpen = false)}
+    onRefreshList={() => fetchTelemetryData(true)}
   />
 </div>

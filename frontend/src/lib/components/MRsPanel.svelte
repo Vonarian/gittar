@@ -8,9 +8,10 @@
     mergeRequests: MergeRequest[];
     username: string;
     onRefresh?: () => void;
+    onSelectMR: (mr: MergeRequest) => void;
   }
 
-  let { mergeRequests = [], username, onRefresh }: Props = $props();
+  let { mergeRequests = [], username, onRefresh, onSelectMR }: Props = $props();
 
   let activeMRTab = $state<"all" | "assigned" | "authored" | "review">("all");
   let viewMode = $state("list");
@@ -536,13 +537,14 @@
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             oncontextmenu={(e) => handleContextMenu(e, mr.web_url)}
-            class="group p-4 bg-slate-950/20 border-t border-r border-b border-l-2 border-y-slate-900/40 border-r-slate-900/40 {getBorderLeftAccent(mr)} hover:bg-slate-900/25 hover:border-y-slate-800/60 hover:border-r-slate-800/60 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl transition-all duration-200 flex items-start justify-between relative"
+            onclick={() => onSelectMR(mr)}
+            class="group p-4 bg-slate-950/20 border-t border-r border-b border-l-2 border-y-slate-900/40 border-r-slate-900/40 {getBorderLeftAccent(mr)} hover:bg-slate-900/25 hover:border-y-slate-800/60 hover:border-r-slate-800/60 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl transition-all duration-200 flex items-start justify-between relative cursor-pointer"
           >
             <div class="min-w-0 flex-1 pr-4">
               <!-- Title, ID, State & Draft Indicator -->
               <div class="flex items-center space-x-2.5 flex-wrap gap-y-1.5">
                 {#if mr.work_in_progress || mr.draft}
-                  <span class="px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider bg-slate-850 text-slate-400 border border-slate-700/60 rounded">
+                  <span class="px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider bg-slate-855 text-slate-400 border border-slate-700/65 rounded">
                     DRAFT
                   </span>
                 {/if}
@@ -557,10 +559,8 @@
                   </span>
                 {/if}
 
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <span
-                  onclick={() => Browser.OpenURL(mr.web_url)}
-                  class="text-sm font-semibold text-slate-100 hover:text-indigo-400 transition cursor-pointer"
+                  class="text-sm font-semibold text-slate-100 group-hover:text-indigo-400 transition"
                   title={mr.title}
                 >
                   {mr.title}
@@ -744,18 +744,16 @@
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
             {#each draftMRs as mr (mr.id)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, mr)}
                 ondragend={handleDragEnd}
-                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                onclick={() => onSelectMR(mr)}
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-pointer transition"
                 class:opacity-40={draggedMR?.id === mr.id}
               >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-100 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
+                <h4 class="text-sm font-semibold text-slate-100 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
                   <span>{formatRelativeTime(mr.updated_at)}</span>
@@ -773,18 +771,16 @@
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
             {#each inProgressMRs as mr (mr.id)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, mr)}
                 ondragend={handleDragEnd}
-                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                onclick={() => onSelectMR(mr)}
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-pointer transition"
                 class:opacity-40={draggedMR?.id === mr.id}
               >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-100 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
+                <h4 class="text-sm font-semibold text-slate-100 group-hover:text-indigo-455 transition mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
                   <span>{formatRelativeTime(mr.updated_at)}</span>
@@ -802,18 +798,16 @@
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
             {#each reviewingMRs as mr (mr.id)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, mr)}
                 ondragend={handleDragEnd}
-                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-grab active:cursor-grabbing transition"
+                onclick={() => onSelectMR(mr)}
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-pointer transition"
                 class:opacity-40={draggedMR?.id === mr.id}
               >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-100 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
+                <h4 class="text-sm font-semibold text-slate-100 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
                   <span>{formatRelativeTime(mr.updated_at)}</span>
@@ -846,11 +840,9 @@
             {/if}
 
             {#each mergedMRs as mr (mr.id)}
-              <div class="group p-3 bg-slate-950/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150">
+              <div onclick={() => onSelectMR(mr)} class="group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150 cursor-pointer">
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-200 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
+                <h4 class="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
                   <span>merged {formatRelativeTime(mr.merged_at || mr.updated_at)}</span>
@@ -883,11 +875,9 @@
             {/if}
 
             {#each closedMRs as mr (mr.id)}
-              <div class="group p-3 bg-slate-950/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150">
+              <div onclick={() => onSelectMR(mr)} class="group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150 cursor-pointer">
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
-                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                <h4 onclick={() => Browser.OpenURL(mr.web_url)} class="text-sm font-semibold text-slate-200 hover:text-indigo-400 cursor-pointer mt-1 line-clamp-2">{mr.title}</h4>
+                <h4 class="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
                   <span>#{mr.iid}</span>
                   <span>closed {formatRelativeTime(mr.closed_at || mr.updated_at)}</span>
