@@ -89,15 +89,28 @@ func NewClient(baseURL, token string, proxyConf *ProxyConfig) *Client {
 	}
 }
 
-// doRequest performs a rate-limited, cached HTTP request.
-// It returns the response body data, a boolean indicating if it was from cache, and an error.
+func isTerminalStatus(status string) bool {
+	switch status {
+	case "success", "failed", "canceled", "skipped", "manual":
+		return true
+	default:
+		return false
+	}
+}
+
+// doRequest performs a rate-limited, cached HTTP request with a default 10s TTL.
 func (c *Client) doRequest(apiPath string) ([]byte, bool, error) {
+	return c.doRequestWithTTL(apiPath, 10*time.Second)
+}
+
+// doRequestWithTTL performs a rate-limited, cached HTTP request with a custom TTL.
+func (c *Client) doRequestWithTTL(apiPath string, ttl time.Duration) ([]byte, bool, error) {
 	fullURL := fmt.Sprintf("%s/api/v4/%s", c.BaseURL, strings.TrimPrefix(apiPath, "/"))
 
-	// 1. Check if cached and within TTL (10 seconds) to bypass network & rate limits
+	// 1. Check if cached and within custom TTL to bypass network & rate limits
 	c.cacheMu.Lock()
 	entry, cached := c.cache[fullURL]
-	if cached && time.Since(entry.fetchedAt) < 10*time.Second {
+	if cached && time.Since(entry.fetchedAt) < ttl {
 		c.cacheMu.Unlock()
 		fmt.Printf("[Go Backend] doRequest Cache HIT (TTL): %s\n", apiPath)
 		return entry.data, true, nil
@@ -160,6 +173,7 @@ func (c *Client) doRequest(apiPath string) ([]byte, bool, error) {
 
 	return bodyBytes, false, nil
 }
+
 
 // GetCurrentUser returns details of the currently authenticated user.
 func (c *Client) GetCurrentUser() (*User, error) {
@@ -271,9 +285,16 @@ func (c *Client) GetPipelineWithJobs(projectIDOrPath string) (*PipelineWithJobs,
 }
 
 // GetSingleMergeRequest fetches detailed information for a single MR.
-func (c *Client) GetSingleMergeRequest(projectID int, mrIID int) (*MergeRequest, error) {
+func (c *Client) GetSingleMergeRequest(projectID int, mrIID int, updatedAt time.Time) (*MergeRequest, error) {
 	path := fmt.Sprintf("projects/%d/merge_requests/%d", projectID, mrIID)
-	data, _, err := c.doRequest(path)
+	if !updatedAt.IsZero() {
+		path = fmt.Sprintf("projects/%d/merge_requests/%d?cache_updated_at=%d", projectID, mrIID, updatedAt.Unix())
+	}
+	ttl := 10 * time.Second
+	if !updatedAt.IsZero() {
+		ttl = 1 * time.Hour
+	}
+	data, _, err := c.doRequestWithTTL(path, ttl)
 	if err != nil {
 		return nil, err
 	}
@@ -344,7 +365,7 @@ func (c *Client) GetMergeRequests(userID int) ([]MergeRequest, error) {
 		go func(idx int, m MergeRequest) {
 			defer wg.Done()
 			if m.HeadPipeline == nil {
-				detailed, err := c.GetSingleMergeRequest(m.ProjectID, m.IID)
+				detailed, err := c.GetSingleMergeRequest(m.ProjectID, m.IID, m.UpdatedAt)
 				if err == nil && detailed != nil {
 					mu.Lock()
 					detailedMRs[idx] = *detailed
@@ -385,7 +406,7 @@ func (c *Client) GetProjectMergeRequests(projectIDOrPath string) ([]MergeRequest
 		go func(idx int, m MergeRequest) {
 			defer wg.Done()
 			if m.HeadPipeline == nil {
-				detailed, err := c.GetSingleMergeRequest(m.ProjectID, m.IID)
+				detailed, err := c.GetSingleMergeRequest(m.ProjectID, m.IID, m.UpdatedAt)
 				if err == nil && detailed != nil {
 					mu.Lock()
 					detailedMRs[idx] = *detailed
@@ -399,6 +420,7 @@ func (c *Client) GetProjectMergeRequests(projectIDOrPath string) ([]MergeRequest
 		}(i, mr)
 	}
 	wg.Wait()
+
 
 	return detailedMRs, nil
 }
@@ -444,7 +466,12 @@ func (c *Client) GetPipelinesWithJobs(projectIDOrPath string, limit int) ([]Pipe
 
 			// Fetch full pipeline details to get duration/user info if available
 			detailedPipeline := p
-			fullPipeData, _, err := c.doRequest(fmt.Sprintf("projects/%s/pipelines/%d", escapedPath, p.ID))
+			ttl := 10 * time.Second
+			if isTerminalStatus(p.Status) {
+				ttl = 1 * time.Hour
+			}
+
+			fullPipeData, _, err := c.doRequestWithTTL(fmt.Sprintf("projects/%s/pipelines/%d", escapedPath, p.ID), ttl)
 			if err == nil {
 				var detailed Pipeline
 				if err2 := json.Unmarshal(fullPipeData, &detailed); err2 == nil {
@@ -454,7 +481,7 @@ func (c *Client) GetPipelinesWithJobs(projectIDOrPath string, limit int) ([]Pipe
 
 			// Fetch pipeline jobs
 			var jobs []Job
-			jobsData, _, err3 := c.doRequest(fmt.Sprintf("projects/%s/pipelines/%d/jobs?per_page=50", escapedPath, p.ID))
+			jobsData, _, err3 := c.doRequestWithTTL(fmt.Sprintf("projects/%s/pipelines/%d/jobs?per_page=50", escapedPath, p.ID), ttl)
 			if err3 == nil {
 				_ = json.Unmarshal(jobsData, &jobs)
 			}

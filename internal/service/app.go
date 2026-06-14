@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"gittar/internal/config"
 	"gittar/internal/gitlab"
@@ -547,9 +548,8 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 
 	for oldID, oldState := range s.mrStates {
 		if !currentMRIDs[oldID] && oldState.State == "opened" {
-			// This MR is no longer returned in the open list. Query its latest state in a background goroutine.
 			go func(oState mrState, cl *gitlab.Client) {
-				detailed, err := cl.GetSingleMergeRequest(oState.ProjectID, oState.IID)
+				detailed, err := cl.GetSingleMergeRequest(oState.ProjectID, oState.IID, time.Time{})
 				if err == nil && detailed != nil {
 					s.stateMu.Lock()
 					s.mrStates[detailed.ID] = mrState{

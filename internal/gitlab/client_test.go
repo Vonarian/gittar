@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestMarkTodoAsDone(t *testing.T) {
@@ -251,4 +253,143 @@ func TestGetPipelinesWithJobs(t *testing.T) {
 		t.Errorf("expected 1 job named 'build', got %v", pwj.Jobs)
 	}
 }
+
+func TestGetPipelinesWithJobs_Caching(t *testing.T) {
+	var detailCallCount int32
+	var jobsCallCount int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if path == "/api/v4/projects/group/project1" {
+			_, _ = w.Write([]byte(`{"id": 10, "name": "project1", "path_with_namespace": "group/project1"}`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/pipelines" {
+			_, _ = w.Write([]byte(`[{"id": 201, "ref": "main", "status": "success"}]`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/pipelines/201" {
+			atomic.AddInt32(&detailCallCount, 1)
+			_, _ = w.Write([]byte(`{"id": 201, "ref": "main", "status": "success", "duration": 120}`))
+			return
+		}
+		if path == "/api/v4/projects/group/project1/pipelines/201/jobs" {
+			atomic.AddInt32(&jobsCallCount, 1)
+			_, _ = w.Write([]byte(`[{"id": 301, "name": "build", "stage": "build", "status": "success"}]`))
+			return
+		}
+
+		t.Errorf("unexpected path: %s", path)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token", nil)
+
+	// First call should hit network and cache it
+	_, err := client.GetPipelinesWithJobs("group/project1", 5)
+	if err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+
+	if atomic.LoadInt32(&detailCallCount) != 1 || atomic.LoadInt32(&jobsCallCount) != 1 {
+		t.Errorf("expected 1 detail and 1 job call on first request, got details=%d, jobs=%d",
+			detailCallCount, jobsCallCount)
+	}
+
+	// Delete only the list cache entry to force list to be refetched
+	listURL := server.URL + "/api/v4/projects/group%2Fproject1/pipelines?per_page=5"
+	client.cacheMu.Lock()
+	delete(client.cache, listURL)
+	client.cacheMu.Unlock()
+
+	// Second call
+	_, err = client.GetPipelinesWithJobs("group/project1", 5)
+	if err != nil {
+		t.Fatalf("second call failed: %v", err)
+	}
+
+	// Calls should not increase because detail/jobs are cached (1-hour TTL)
+	if atomic.LoadInt32(&detailCallCount) != 1 || atomic.LoadInt32(&jobsCallCount) != 1 {
+		t.Errorf("expected no additional network calls for terminal pipeline details/jobs, got details=%d, jobs=%d",
+			detailCallCount, jobsCallCount)
+	}
+}
+
+func TestGetMergeRequests_Caching(t *testing.T) {
+	var detailedCallCount int32
+	updatedAtTime := time.Date(2026, 6, 14, 12, 0, 0, 0, time.UTC)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if path == "/api/v4/merge_requests" {
+			// Return one MR with head_pipeline = nil so it queries details
+			_, _ = fmt.Fprintf(w, `[{"id": 1, "iid": 101, "project_id": 10, "title": "Test MR", "state": "opened", "web_url": "http://example.com/mr/101", "updated_at": "%s"}]`, updatedAtTime.Format(time.RFC3339))
+			return
+		}
+		if path == "/api/v4/projects/10/merge_requests/101" {
+			atomic.AddInt32(&detailedCallCount, 1)
+			_, _ = w.Write([]byte(`{"id": 1, "iid": 101, "project_id": 10, "title": "Test MR Detailed", "state": "opened", "web_url": "http://example.com/mr/101", "head_pipeline": null}`))
+			return
+		}
+
+		t.Errorf("unexpected path: %s", path)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token", nil)
+
+	// First call - should query details
+	_, err := client.GetMergeRequests(5)
+	if err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+
+	if atomic.LoadInt32(&detailedCallCount) != 1 {
+		t.Errorf("expected 1 detailed query, got %d", detailedCallCount)
+	}
+
+	// Delete only the list endpoints caches
+	client.cacheMu.Lock()
+	delete(client.cache, server.URL+"/api/v4/merge_requests?state=opened&scope=assigned_to_me&per_page=30")
+	delete(client.cache, server.URL+"/api/v4/merge_requests?state=opened&scope=created_by_me&per_page=30")
+	delete(client.cache, server.URL+"/api/v4/merge_requests?state=opened&reviewer_id=5&per_page=30")
+	client.cacheMu.Unlock()
+
+	// Second call with same updatedAt - should hit cache
+	_, err = client.GetMergeRequests(5)
+	if err != nil {
+		t.Fatalf("second call failed: %v", err)
+	}
+
+	if atomic.LoadInt32(&detailedCallCount) != 1 {
+		t.Errorf("expected still 1 detailed query (cached), got %d", detailedCallCount)
+	}
+
+	// Now modify updatedAt
+	updatedAtTime = updatedAtTime.Add(1 * time.Minute)
+
+	// Delete only the list endpoints caches again
+	client.cacheMu.Lock()
+	delete(client.cache, server.URL+"/api/v4/merge_requests?state=opened&scope=assigned_to_me&per_page=30")
+	delete(client.cache, server.URL+"/api/v4/merge_requests?state=opened&scope=created_by_me&per_page=30")
+	delete(client.cache, server.URL+"/api/v4/merge_requests?state=opened&reviewer_id=5&per_page=30")
+	client.cacheMu.Unlock()
+
+	// Third call with new updatedAt - should query details again (cache miss)
+	_, err = client.GetMergeRequests(5)
+	if err != nil {
+		t.Fatalf("third call failed: %v", err)
+	}
+
+	if atomic.LoadInt32(&detailedCallCount) != 2 {
+		t.Errorf("expected 2 detailed queries (cache miss after update), got %d", detailedCallCount)
+	}
+}
+
 
