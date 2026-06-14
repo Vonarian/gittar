@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { untrack, onMount } from "svelte";
   import type { MergeRequest, Commit, Note } from "../../../bindings/gittar/internal/gitlab/models";
   import { 
     GetMergeRequestCommits, 
@@ -34,6 +34,13 @@
   let isLoadingNotes = $state(false);
   let isPostingComment = $state(false);
   let isProcessingAction = $state<"merging" | "closing" | null>(null);
+  let isActivityExpanded = $state(true);
+
+  onMount(() => {
+    (window as any).__openExternal = (url: string) => {
+      Browser.OpenURL(url);
+    };
+  });
   
   let newCommentText = $state("");
   let mrError = $state("");
@@ -103,6 +110,21 @@
       }
     }
     return parts.join("");
+  }
+
+  // Safe formatter for system activity notes (handles HTML and Markdown links)
+  function formatSystemNote(text: string): string {
+    if (!text) return "";
+    
+    // Replace markdown links with clickable external links routed through Wails Browser.OpenURL
+    let formatted = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText, url) => {
+      return `<a href="javascript:void(0)" onclick="window.__openExternal('${url}')" class="text-indigo-400 hover:underline hover:text-indigo-350 transition duration-150">${linkText}</a>`;
+    });
+    
+    // Format inline code/hashes `c9c77ced`
+    formatted = formatted.replace(/`([^`\n]+)`/g, '<code class="bg-slate-900 border border-slate-800 px-1 py-0.5 rounded font-mono text-[10px] text-pink-400 select-text">$1</code>');
+    
+    return formatted;
   }
 
   // Load fresh details for the MR
@@ -310,22 +332,26 @@
         </div>
 
         <!-- Right Side Control Buttons -->
-        <div class="flex items-center space-x-2 shrink-0">
+        <div class="flex items-center space-x-2 shrink-0 select-none">
+          <!-- Refresh Button -->
           <button
             onclick={refreshAll}
             disabled={isLoadingMR}
-            class="p-2 hover:bg-slate-900 rounded-lg text-slate-500 hover:text-slate-300 transition cursor-pointer"
+            aria-label="Refresh Details"
             title="Refresh Details"
+            class="w-9 h-9 flex items-center justify-center hover:bg-slate-900 rounded-lg text-slate-500 hover:text-slate-250 transition cursor-pointer"
           >
-            <svg class="w-4 h-4 {isLoadingMR ? 'animate-spin text-indigo-400' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-5 h-5 {isLoadingMR ? 'animate-spin text-indigo-400' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17" />
             </svg>
           </button>
           
+          <!-- Close Button -->
           <button
-            aria-label="Close"
             onclick={onClose}
-            class="p-2 hover:bg-slate-900 rounded-lg text-slate-500 hover:text-slate-200 transition cursor-pointer"
+            aria-label="Close Drawer"
+            title="Close Drawer"
+            class="w-9 h-9 flex items-center justify-center hover:bg-slate-900 rounded-lg text-slate-500 hover:text-slate-255 transition cursor-pointer"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -377,6 +403,111 @@
             <div class="bg-slate-950/40 border border-slate-900/60 rounded-xl p-5 text-sm text-slate-350 leading-relaxed max-w-none overflow-x-auto selection:bg-indigo-500/30 select-text">
               {@html formatMarkdown(displayMR.description)}
             </div>
+
+            <!-- Activity & Discussion Section (Expandable) -->
+            <div class="mt-6 flex items-center justify-between border-b border-slate-900/60 pb-3 mb-4 select-none">
+              <div class="flex items-center space-x-2">
+                <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Activity & Discussion</h3>
+                {#if notes.length > 0}
+                  <span class="px-1.5 py-0.2 bg-slate-900 border border-slate-800 text-[10px] text-slate-400 rounded-full font-mono">{userCommentsCount}</span>
+                {/if}
+              </div>
+              <button 
+                onclick={() => isActivityExpanded = !isActivityExpanded} 
+                class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold cursor-pointer transition duration-150"
+              >
+                {isActivityExpanded ? 'Hide Activity' : 'Show Activity'}
+              </button>
+            </div>
+
+            {#if isActivityExpanded}
+              <!-- Combined Activity Feed -->
+              <div class="space-y-4 mb-6">
+                <!-- Activity list -->
+                {#if isLoadingNotes}
+                  <div class="py-10 flex flex-col items-center justify-center space-y-2">
+                    <div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p class="text-[10px] text-slate-550 font-mono">Loading activity...</p>
+                  </div>
+                {:else if notesError}
+                  <p class="text-xs text-rose-400 font-mono">{notesError}</p>
+                {:else if notes.length === 0}
+                  <p class="text-xs text-slate-555 italic py-2">No comments or activity logs yet.</p>
+                {:else}
+                  <div class="space-y-4">
+                    {#each notes as note (note.id)}
+                      {#if note.system}
+                        <!-- System Activity Row -->
+                        <div class="flex items-start space-x-2.5 text-xs text-slate-405 px-2 py-0.5 select-text">
+                          <span class="w-1.5 h-1.5 rounded-full bg-slate-800 border border-slate-700 mt-1.5 shrink-0"></span>
+                          <div class="flex-1 min-w-0">
+                            <div class="flex items-baseline space-x-1.5 flex-wrap">
+                              <span class="font-semibold text-slate-300">{note.author?.name}</span>
+                              <span class="system-note-body leading-relaxed select-text">
+                                {@html formatSystemNote(note.body)}
+                              </span>
+                              <span class="text-[10px] text-slate-505 font-mono whitespace-nowrap">{formatRelativeTime(note.created_at)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      {:else}
+                        <!-- User Comment Card -->
+                        <div class="flex items-start space-x-3 bg-slate-950/40 border border-slate-900/50 rounded-xl p-4 selection:bg-indigo-500/30 select-text">
+                          {#if note.author?.avatar_url}
+                            <img src={note.author.avatar_url} alt="" class="w-7 h-7 rounded-full shrink-0 border border-slate-855 mt-0.5" />
+                          {:else}
+                            <div class="w-7 h-7 rounded-full bg-slate-800 shrink-0 border border-slate-700 flex items-center justify-center text-slate-400 text-[10px] font-bold mt-0.5">
+                              {note.author?.name?.slice(0, 2).toUpperCase() || 'U'}
+                            </div>
+                          {/if}
+                          <div class="flex-1 min-w-0 select-text">
+                            <div class="flex items-baseline justify-between select-none">
+                              <div class="flex items-baseline space-x-1.5">
+                                <span class="text-xs font-semibold text-slate-200">{note.author?.name}</span>
+                                <span class="text-[10px] text-slate-500">@{note.author?.username}</span>
+                              </div>
+                              <span class="text-[10px] text-slate-505 font-mono">{formatRelativeTime(note.created_at)}</span>
+                            </div>
+                            <div class="mt-2 text-xs text-slate-355 leading-relaxed max-w-none overflow-x-auto select-text">
+                              {@html formatMarkdown(note.body)}
+                            </div>
+                          </div>
+                        </div>
+                      {/if}
+                    {/each}
+                  </div>
+                {/if}
+
+                <!-- Quick Comment Input -->
+                <div class="mt-4 border border-slate-900 bg-slate-950/50 rounded-xl p-4">
+                  <textarea
+                    bind:value={newCommentText}
+                    onkeydown={handleTextareaKeyDown}
+                    placeholder="Write a comment... (Cmd/Ctrl + Enter to send)"
+                    rows="2"
+                    class="w-full bg-slate-950/80 border border-slate-900 hover:border-slate-850 focus:border-indigo-600 rounded-lg p-3 text-xs text-slate-250 placeholder-slate-655 focus:outline-none resize-none transition select-text"
+                  ></textarea>
+                  <div class="flex justify-between items-center mt-2.5 select-none">
+                    <span class="text-[9px] font-mono text-slate-600">Supports Basic Markdown</span>
+                    <button
+                      onclick={handlePostComment}
+                      disabled={!newCommentText.trim() || isPostingComment}
+                      class="px-4 py-1.5 bg-indigo-655 hover:bg-indigo-600 disabled:bg-slate-900 text-white border border-indigo-500/20 disabled:border-transparent rounded-lg text-xs font-semibold shadow-sm transition flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      {#if isPostingComment}
+                        <div class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span>Commenting...</span>
+                      {:else}
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                        </svg>
+                        <span>Comment</span>
+                      {/if}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            {/if}
           </div>
 
           <!-- Right Content (Metadata Sidebar) -->
@@ -608,11 +739,17 @@
                 {#each notes as note (note.id)}
                   {#if note.system}
                     <!-- System Activity Row -->
-                    <div class="flex items-center space-x-2 text-[10px] text-slate-500/80 px-2 select-text">
-                      <span class="w-1.5 h-1.5 rounded-full bg-slate-800 border border-slate-700"></span>
-                      <span class="font-medium text-slate-450">{note.author?.name}</span>
-                      <span class="truncate max-w-[500px] select-text">{note.body}</span>
-                      <span class="text-slate-600 font-mono">{formatRelativeTime(note.created_at)}</span>
+                    <div class="flex items-start space-x-2.5 text-xs text-slate-405 px-2 py-0.5 select-text">
+                      <span class="w-1.5 h-1.5 rounded-full bg-slate-800 border border-slate-700 mt-1.5 shrink-0"></span>
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-baseline space-x-1.5 flex-wrap">
+                          <span class="font-semibold text-slate-300">{note.author?.name}</span>
+                          <span class="system-note-body leading-relaxed select-text">
+                            {@html formatSystemNote(note.body)}
+                          </span>
+                          <span class="text-[10px] text-slate-500 font-mono whitespace-nowrap">{formatRelativeTime(note.created_at)}</span>
+                        </div>
+                      </div>
                     </div>
                   {:else}
                     <!-- User Comment Card -->
@@ -706,5 +843,26 @@
   }
   div::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.15);
+  }
+
+  :global(.system-note-body ul) {
+    margin-top: 4px;
+    margin-bottom: 4px;
+    padding-left: 18px;
+    list-style-type: disc;
+  }
+  :global(.system-note-body li) {
+    margin-top: 2px;
+    margin-bottom: 2px;
+    font-size: 11px;
+    color: #94a3b8; /* slate-400 */
+  }
+  :global(.system-note-body a) {
+    color: #818cf8; /* indigo-400 */
+    font-weight: 500;
+  }
+  :global(.system-note-body a:hover) {
+    color: #a5b4fc; /* indigo-350 */
+    text-decoration: underline;
   }
 </style>
