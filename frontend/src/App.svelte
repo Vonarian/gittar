@@ -213,6 +213,11 @@
     startPolling();
   });
 
+  function handleWindowFocus() {
+    console.log("[App] Window focused, refreshing telemetry...");
+    fetchTelemetryData(false);
+  }
+
   onDestroy(() => {
     stopPolling();
     if (isWindows) {
@@ -220,6 +225,8 @@
     }
   });
 </script>
+
+<svelte:window onfocus={handleWindowFocus} />
 
 <div class="app-container select-none">
   <!-- Sidebar Panel -->
