@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import type { MergeRequest } from "../../../bindings/gittar/internal/gitlab/models";
   import { Browser, Clipboard } from "@wailsio/runtime";
-  import { MergeMergeRequest, CloseMergeRequest } from "../../../bindings/gittar/internal/service/appservice";
+  import { MergeMergeRequest, CloseMergeRequest, GetSingleMergeRequest } from "../../../bindings/gittar/internal/service/appservice";
 
   interface Props {
     mergeRequests: MergeRequest[];
@@ -12,6 +12,151 @@
   }
 
   let { mergeRequests = [], username, onRefresh, onSelectMR }: Props = $props();
+
+  interface TransitionMR extends MergeRequest {
+    _glowActive?: boolean;
+    _isFadingOut?: boolean;
+  }
+
+  let localMRs = $state<TransitionMR[]>([]);
+
+  interface MRTimerInfo {
+    mrId: number;
+    timeLeft: number;
+    lastTick: number;
+    timeoutId: any;
+    paused: boolean;
+  }
+  const mrTimers = new Map<number, MRTimerInfo>();
+
+  async function checkMRTransition(mr: TransitionMR) {
+    try {
+      const fresh = await GetSingleMergeRequest(mr.project_id, mr.iid);
+      if (fresh && (fresh.state === "merged" || fresh.state === "closed")) {
+        updateMRStateLocally(mr.id, fresh.state as any);
+      } else {
+        removeMRLocally(mr.id);
+      }
+    } catch (e) {
+      console.error("Failed to check MR transition:", e);
+      removeMRLocally(mr.id);
+    }
+  }
+
+  function updateMRStateLocally(mrId: number, newState: "merged" | "closed") {
+    const idx = localMRs.findIndex(m => m.id === mrId);
+    if (idx !== -1) {
+      localMRs[idx].state = newState;
+      if (newState === "merged") {
+        localMRs[idx].merged_at = new Date().toISOString();
+      } else {
+        localMRs[idx].closed_at = new Date().toISOString();
+      }
+      startMRTimer(mrId, 5000);
+    }
+  }
+
+  function removeMRLocally(mrId: number) {
+    clearMRTimer(mrId);
+    localMRs = localMRs.filter(m => m.id !== mrId);
+  }
+
+  function startMRTimer(mrId: number, durationMs = 5000) {
+    clearMRTimer(mrId);
+
+    const timerInfo: MRTimerInfo = {
+      mrId,
+      timeLeft: durationMs,
+      lastTick: Date.now(),
+      timeoutId: null,
+      paused: false
+    };
+
+    const mr = localMRs.find(m => m.id === mrId);
+    if (mr) {
+      mr._glowActive = true;
+      mr._isFadingOut = false;
+    }
+
+    timerInfo.timeoutId = setTimeout(() => handleTimerExpiry(mrId), durationMs);
+    mrTimers.set(mrId, timerInfo);
+  }
+
+  function clearMRTimer(mrId: number) {
+    const timer = mrTimers.get(mrId);
+    if (timer) {
+      if (timer.timeoutId) clearTimeout(timer.timeoutId);
+      mrTimers.delete(mrId);
+    }
+  }
+
+  function handleTimerExpiry(mrId: number) {
+    mrTimers.delete(mrId);
+    const mr = localMRs.find(m => m.id === mrId);
+    if (mr) {
+      mr._glowActive = false;
+      mr._isFadingOut = true;
+
+      // Wait 400ms for transition animation to finish before removing from list
+      setTimeout(() => {
+        localMRs = localMRs.filter(m => m.id !== mrId);
+      }, 400);
+    }
+  }
+
+  function handleMouseEnter(mrId: number) {
+    const timer = mrTimers.get(mrId);
+    if (!timer || timer.paused) return;
+
+    if (timer.timeoutId) clearTimeout(timer.timeoutId);
+    timer.timeoutId = null;
+
+    const elapsed = Date.now() - timer.lastTick;
+    timer.timeLeft = Math.max(0, timer.timeLeft - elapsed);
+    timer.paused = true;
+  }
+
+  function handleMouseLeave(mrId: number) {
+    const timer = mrTimers.get(mrId);
+    if (!timer || !timer.paused) return;
+
+    timer.lastTick = Date.now();
+    timer.paused = false;
+    timer.timeoutId = setTimeout(() => handleTimerExpiry(mrId), timer.timeLeft);
+  }
+
+  function syncMRs(newMRs: MergeRequest[]) {
+    const newMRMap = new Map<number, MergeRequest>();
+    for (const mr of newMRs) {
+      newMRMap.set(mr.id, mr);
+    }
+
+    // Keep existing items or check transitions for vanished ones
+    for (const localMR of localMRs) {
+      if (!newMRMap.has(localMR.id)) {
+        if (localMR.state === "opened") {
+          checkMRTransition(localMR);
+        }
+      } else {
+        const newMR = newMRMap.get(localMR.id)!;
+        Object.assign(localMR, newMR);
+      }
+    }
+
+    // Add new MRs
+    for (const newMR of newMRs) {
+      if (!localMRs.some(m => m.id === newMR.id)) {
+        localMRs.push({ ...newMR, _glowActive: false, _isFadingOut: false });
+      }
+    }
+  }
+
+  $effect(() => {
+    const newMRs = mergeRequests;
+    untrack(() => {
+      syncMRs(newMRs);
+    });
+  });
 
   let activeMRTab = $state<"all" | "assigned" | "authored" | "review">("all");
   let viewMode = $state("list");
@@ -64,6 +209,10 @@
   onDestroy(() => {
     window.removeEventListener("click", closeContextMenu);
     window.removeEventListener("contextmenu", closeContextMenu);
+    for (const timer of mrTimers.values()) {
+      if (timer.timeoutId) clearTimeout(timer.timeoutId);
+    }
+    mrTimers.clear();
   });
 
   $effect(() => {
@@ -87,6 +236,7 @@
     processingMRs[mrId] = "merging";
     try {
       await MergeMergeRequest(projectId, mrIID);
+      updateMRStateLocally(mrId, "merged");
       if (onRefresh) onRefresh();
     } catch (e: any) {
       console.error("Failed to merge MR:", e);
@@ -104,6 +254,7 @@
     processingMRs[mrId] = "closing";
     try {
       await CloseMergeRequest(projectId, mrIID);
+      updateMRStateLocally(mrId, "closed");
       if (onRefresh) onRefresh();
     } catch (e: any) {
       console.error("Failed to close MR:", e);
@@ -127,41 +278,41 @@
 
   // Dynamic filtering
   const assignedMRs = $derived(
-    mergeRequests.filter((mr) =>
+    localMRs.filter((mr) =>
       (mr.assignees || []).some((a) => a.username === username)
     )
   );
 
   const authoredMRs = $derived(
-    mergeRequests.filter((mr) => mr.author?.username === username)
+    localMRs.filter((mr) => mr.author?.username === username)
   );
 
   const reviewRequests = $derived(
-    mergeRequests.filter((mr) =>
+    localMRs.filter((mr) =>
       (mr.reviewers || []).some((r) => r.username === username)
     )
   );
 
   const uniqueGroups = $derived([
-    ...new Set(mergeRequests.map((mr) => getProjectPath(mr.web_url).split("/")[0]).filter(Boolean)),
+    ...new Set(localMRs.map((mr) => getProjectPath(mr.web_url).split("/")[0]).filter(Boolean)),
   ]);
 
   const uniqueProjects = $derived([
-    ...new Set(mergeRequests.map((mr) => getProjectPath(mr.web_url)).filter(Boolean)),
+    ...new Set(localMRs.map((mr) => getProjectPath(mr.web_url)).filter(Boolean)),
   ]);
 
   const uniqueUsers = $derived([
     ...new Set([
-      ...mergeRequests.map((mr) => mr.author?.name),
-      ...mergeRequests.flatMap((mr) => (mr.assignees || []).map((a) => a.name)),
-      ...mergeRequests.flatMap((mr) => (mr.reviewers || []).map((r) => r.name)),
+      ...localMRs.map((mr) => mr.author?.name),
+      ...localMRs.flatMap((mr) => (mr.assignees || []).map((a) => a.name)),
+      ...localMRs.flatMap((mr) => (mr.reviewers || []).map((r) => r.name)),
     ].filter(Boolean)),
   ]);
 
   const baseList = $derived.by(() => {
     switch (activeMRTab) {
       case "all":
-        return mergeRequests;
+        return localMRs;
       case "assigned":
         return assignedMRs;
       case "authored":
@@ -391,9 +542,9 @@
       class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-2 {activeMRTab === 'all' ? 'bg-slate-900 text-white border border-slate-800' : 'text-slate-400 hover:text-slate-200'}"
     >
       <span>All</span>
-      {#if mergeRequests.length > 0}
+      {#if localMRs.length > 0}
         <span class="px-1.5 py-0.5 text-[10px] bg-slate-800 text-slate-355 rounded-full">
-          {mergeRequests.length}
+          {localMRs.length}
         </span>
       {/if}
     </button>
@@ -436,7 +587,7 @@
   </div>
 
   <!-- Filter & Search Toolbar -->
-  {#if mergeRequests.length > 0}
+  {#if localMRs.length > 0}
     <div class="px-6 py-3 border-b border-slate-900/40 bg-slate-950/20 flex flex-wrap items-center gap-3 select-none">
       <!-- Search Input -->
       <div class="relative w-48">
@@ -539,7 +690,15 @@
           <div
             oncontextmenu={(e) => handleContextMenu(e, mr.web_url)}
             onclick={() => onSelectMR(mr)}
-            class="group p-4 bg-slate-950/20 border-t border-r border-b border-l-2 border-y-slate-900/40 border-r-slate-900/40 {getBorderLeftAccent(mr)} hover:bg-slate-900/25 hover:border-y-slate-800/60 hover:border-r-slate-800/60 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl transition-all duration-200 flex items-start justify-between relative cursor-pointer"
+            onmouseenter={() => handleMouseEnter(mr.id)}
+            onmouseleave={() => handleMouseLeave(mr.id)}
+            class={[
+              "group p-4 bg-slate-950/20 border-t border-r border-b border-l-2 border-y-slate-900/40 border-r-slate-900/40 hover:bg-slate-900/25 hover:border-y-slate-800/60 hover:border-r-slate-800/60 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl flex items-start justify-between relative cursor-pointer mr-transitionable",
+              getBorderLeftAccent(mr),
+              mr.state === "merged" && mr._glowActive && "mr-glow-merged",
+              mr.state === "closed" && mr._glowActive && "mr-glow-closed",
+              mr._isFadingOut && "mr-fade-out"
+            ]}
           >
             <div class="min-w-0 flex-1 pr-4">
               <!-- Title, ID, State & Draft Indicator -->
@@ -849,7 +1008,16 @@
             {#each mergedMRs as mr (mr.id)}
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div onclick={() => onSelectMR(mr)} class="group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150 cursor-pointer">
+              <div
+                onclick={() => onSelectMR(mr)}
+                onmouseenter={() => handleMouseEnter(mr.id)}
+                onmouseleave={() => handleMouseLeave(mr.id)}
+                class={[
+                  "group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 cursor-pointer mr-transitionable",
+                  mr.state === "merged" && mr._glowActive && "mr-glow-merged-kanban",
+                  mr._isFadingOut && "mr-fade-out"
+                ]}
+              >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <h4 class="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
@@ -886,7 +1054,16 @@
             {#each closedMRs as mr (mr.id)}
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div onclick={() => onSelectMR(mr)} class="group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150 cursor-pointer">
+              <div
+                onclick={() => onSelectMR(mr)}
+                onmouseenter={() => handleMouseEnter(mr.id)}
+                onmouseleave={() => handleMouseLeave(mr.id)}
+                class={[
+                  "group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 cursor-pointer mr-transitionable",
+                  mr.state === "closed" && mr._glowActive && "mr-glow-closed-kanban",
+                  mr._isFadingOut && "mr-fade-out"
+                ]}
+              >
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <h4 class="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
                 <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
@@ -926,3 +1103,75 @@
     </button>
   </div>
 {/if}
+
+<style>
+  @keyframes merged-glow {
+    0%, 100% {
+      box-shadow: 0 0 12px 2px rgba(99, 102, 241, 0.4);
+      border-color: rgba(99, 102, 241, 0.6);
+    }
+    50% {
+      box-shadow: 0 0 20px 4px rgba(99, 102, 241, 0.6);
+      border-color: rgba(99, 102, 241, 0.9);
+    }
+  }
+
+  @keyframes closed-glow {
+    0%, 100% {
+      box-shadow: 0 0 12px 2px rgba(244, 63, 94, 0.4);
+      border-color: rgba(244, 63, 94, 0.6);
+    }
+    50% {
+      box-shadow: 0 0 20px 4px rgba(244, 63, 94, 0.6);
+      border-color: rgba(244, 63, 94, 0.9);
+    }
+  }
+
+  .mr-glow-merged {
+    animation: merged-glow 2s infinite ease-in-out;
+    background-color: rgba(99, 102, 241, 0.05) !important;
+  }
+
+  .mr-glow-closed {
+    animation: closed-glow 2s infinite ease-in-out;
+    background-color: rgba(244, 63, 94, 0.05) !important;
+  }
+
+  .mr-glow-merged-kanban {
+    animation: merged-glow 2s infinite ease-in-out;
+    background-color: rgba(99, 102, 241, 0.1) !important;
+    opacity: 1 !important;
+  }
+
+  .mr-glow-closed-kanban {
+    animation: closed-glow 2s infinite ease-in-out;
+    background-color: rgba(244, 63, 94, 0.1) !important;
+    opacity: 1 !important;
+  }
+
+  .mr-glow-merged:hover,
+  .mr-glow-closed:hover,
+  .mr-glow-merged-kanban:hover,
+  .mr-glow-closed-kanban:hover {
+    animation-play-state: paused;
+  }
+
+  .mr-transitionable {
+    max-height: 500px;
+    transition: all 400ms cubic-bezier(0.4, 0, 0.2, 1), background-color 200ms, border-color 200ms;
+  }
+
+  .mr-fade-out {
+    opacity: 0 !important;
+    max-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-top-width: 0 !important;
+    border-bottom-width: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    transition: all 400ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+</style>
