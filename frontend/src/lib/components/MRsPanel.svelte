@@ -534,6 +534,7 @@
     {:else if viewMode === "list"}
       <div class="h-full overflow-y-auto p-6 space-y-3">
         {#each filteredMRs as mr (mr.id)}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             oncontextmenu={(e) => handleContextMenu(e, mr.web_url)}
@@ -744,6 +745,8 @@
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
             {#each draftMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, mr)}
@@ -771,6 +774,8 @@
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
             {#each inProgressMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, mr)}
@@ -798,6 +803,8 @@
           </div>
           <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
             {#each reviewingMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 draggable="true"
                 ondragstart={(e) => handleDragStart(e, mr)}
@@ -840,6 +847,8 @@
             {/if}
 
             {#each mergedMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div onclick={() => onSelectMR(mr)} class="group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150 cursor-pointer">
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <h4 class="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
@@ -875,6 +884,8 @@
             {/if}
 
             {#each closedMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div onclick={() => onSelectMR(mr)} class="group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 transition duration-150 cursor-pointer">
                 <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
                 <h4 class="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>

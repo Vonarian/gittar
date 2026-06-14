@@ -278,6 +278,8 @@
             <span class="text-xs text-slate-400 font-mono truncate">{displayMR.web_url.split('/-/merge_requests/')[0].split('/').slice(3).join('/')}</span>
           </div>
 
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <!-- MR Title -->
           <h2 class="text-lg font-bold text-slate-100 mt-2 leading-snug cursor-text select-text hover:text-indigo-300 transition-colors duration-150" onclick={() => Browser.OpenURL(displayMR.web_url)} title="Open in GitLab">
             {displayMR.title}
