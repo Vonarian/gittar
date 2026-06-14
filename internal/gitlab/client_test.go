@@ -392,4 +392,89 @@ func TestGetMergeRequests_Caching(t *testing.T) {
 	}
 }
 
+func TestGetSingleMergeRequest_DynamicTTL(t *testing.T) {
+	var detailedCallCount int32
+	var pipelineStatus = "running"
+	updatedAtTime := time.Date(2026, 6, 14, 12, 0, 0, 0, time.UTC)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+
+		if path == "/api/v4/projects/10/merge_requests/101" {
+			atomic.AddInt32(&detailedCallCount, 1)
+			_, _ = fmt.Fprintf(w, `{"id": 1, "iid": 101, "project_id": 10, "title": "Test MR Detailed", "state": "opened", "web_url": "http://example.com/mr/101", "head_pipeline": {"id": 201, "status": "%s"}}`, pipelineStatus)
+			return
+		}
+
+		t.Errorf("unexpected path: %s", path)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-token", nil)
+
+	// First call: pipeline is running -> should hit network and cache with short 10s TTL
+	mr1, err := client.GetSingleMergeRequest(10, 101, updatedAtTime)
+	if err != nil {
+		t.Fatalf("first call failed: %v", err)
+	}
+	if mr1.HeadPipeline == nil || mr1.HeadPipeline.Status != "running" {
+		t.Errorf("expected running pipeline, got %v", mr1.HeadPipeline)
+	}
+	if atomic.LoadInt32(&detailedCallCount) != 1 {
+		t.Errorf("expected 1 network call, got %d", detailedCallCount)
+	}
+
+	// Change status to success on mock server
+	pipelineStatus = "success"
+
+	// Simulate 15 seconds passing (TTL of 10s is expired)
+	fullURL := server.URL + "/api/v4/projects/10/merge_requests/101?cache_updated_at=1781438400"
+	client.cacheMu.Lock()
+	if entry, exists := client.cache[fullURL]; exists {
+		entry.fetchedAt = time.Now().Add(-15 * time.Second)
+	} else {
+		t.Fatalf("expected cache entry to exist")
+	}
+	client.cacheMu.Unlock()
+
+	// Second call: running status was expired -> should query network and get success
+	mr2, err := client.GetSingleMergeRequest(10, 101, updatedAtTime)
+	if err != nil {
+		t.Fatalf("second call failed: %v", err)
+	}
+	if mr2.HeadPipeline == nil || mr2.HeadPipeline.Status != "success" {
+		t.Errorf("expected success pipeline, got %v", mr2.HeadPipeline)
+	}
+	if atomic.LoadInt32(&detailedCallCount) != 2 {
+		t.Errorf("expected 2 network calls (expired running cache), got %d", detailedCallCount)
+	}
+
+	// Change status to failed on mock server (just to verify cache hit doesn't fetch it)
+	pipelineStatus = "failed"
+
+	// Simulate 15 seconds passing again
+	client.cacheMu.Lock()
+	if entry, exists := client.cache[fullURL]; exists {
+		entry.fetchedAt = time.Now().Add(-15 * time.Second)
+	} else {
+		t.Fatalf("expected cache entry to exist")
+	}
+	client.cacheMu.Unlock()
+
+	// Third call: success status is terminal -> 1-hour TTL -> should hit cache, not network (status remains success)
+	mr3, err := client.GetSingleMergeRequest(10, 101, updatedAtTime)
+	if err != nil {
+		t.Fatalf("third call failed: %v", err)
+	}
+	if mr3.HeadPipeline == nil || mr3.HeadPipeline.Status != "success" {
+		t.Errorf("expected success pipeline (cached), got %v", mr3.HeadPipeline)
+	}
+	// Call count should STILL be 2!
+	if atomic.LoadInt32(&detailedCallCount) != 2 {
+		t.Errorf("expected no extra network call (terminal success was cached), got %d", detailedCallCount)
+	}
+}
+
 

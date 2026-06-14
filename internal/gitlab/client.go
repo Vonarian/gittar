@@ -290,11 +290,36 @@ func (c *Client) GetSingleMergeRequest(projectID int, mrIID int, updatedAt time.
 	if !updatedAt.IsZero() {
 		path = fmt.Sprintf("projects/%d/merge_requests/%d?cache_updated_at=%d", projectID, mrIID, updatedAt.Unix())
 	}
-	ttl := 10 * time.Second
-	if !updatedAt.IsZero() {
-		ttl = 1 * time.Hour
+
+	fullURL := fmt.Sprintf("%s/api/v4/%s", c.BaseURL, strings.TrimPrefix(path, "/"))
+
+	// Inspect existing cache entry to dynamically determine TTL based on current pipeline status
+	c.cacheMu.Lock()
+	entry, cached := c.cache[fullURL]
+	if cached {
+		var cachedMR MergeRequest
+		if err := json.Unmarshal(entry.data, &cachedMR); err == nil {
+			ttl := 10 * time.Second
+			if cachedMR.HeadPipeline != nil {
+				if isTerminalStatus(cachedMR.HeadPipeline.Status) {
+					ttl = 1 * time.Hour
+				}
+			} else {
+				// MR has no pipeline. Caching for 10 mins is safe because any commit pushes change updatedAt.
+				ttl = 10 * time.Minute
+			}
+
+			if time.Since(entry.fetchedAt) < ttl {
+				c.cacheMu.Unlock()
+				fmt.Printf("[Go Backend] GetSingleMergeRequest Cache HIT (Dynamic TTL): %s\n", path)
+				return &cachedMR, nil
+			}
+		}
 	}
-	data, _, err := c.doRequestWithTTL(path, ttl)
+	c.cacheMu.Unlock()
+
+	// Cache miss or expired: fetch fresh data with 10s default TTL
+	data, _, err := c.doRequestWithTTL(path, 10*time.Second)
 	if err != nil {
 		return nil, err
 	}
