@@ -90,11 +90,11 @@
         onclick={() => onSelectTab("todos")}
         class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'todos' ? 'bg-indigo-600/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
       >
-        <div class="flex items-center space-x-2.5">
+        <div class="flex items-center space-x-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
           </svg>
-          <span>Inbox Feed</span>
+          <span class="whitespace-nowrap">Inbox Feed</span>
         </div>
         {#if todosCount > 0}
           <span class="px-2 py-0.5 text-xs font-semibold bg-indigo-500/15 text-indigo-400 rounded-full border border-indigo-500/25">
@@ -108,11 +108,11 @@
         onclick={() => onSelectTab("pipelines")}
         class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'pipelines' ? 'bg-indigo-600/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
       >
-        <div class="flex items-center space-x-2.5">
+        <div class="flex items-center space-x-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
           </svg>
-          <span>Pipelines Matrix</span>
+          <span class="whitespace-nowrap">Pipelines Matrix</span>
         </div>
         <div class="flex items-center space-x-1">
           {#if failedPipelines > 0}
@@ -133,11 +133,11 @@
         onclick={() => onSelectTab("mrs")}
         class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'mrs' ? 'bg-indigo-650/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
       >
-        <div class="flex items-center space-x-2.5">
+        <div class="flex items-center space-x-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
           </svg>
-          <span>MR Gatekeeper</span>
+          <span class="whitespace-nowrap">MR Gatekeeper</span>
         </div>
         {#if mrsCount > 0}
           <span class="px-2 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">
@@ -151,11 +151,11 @@
         onclick={() => onSelectTab("issues")}
         class="w-full flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'issues' ? 'bg-indigo-650/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
       >
-        <div class="flex items-center space-x-2.5">
+        <div class="flex items-center space-x-2">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>Issues Tracker</span>
+          <span class="whitespace-nowrap">Issues Tracker</span>
         </div>
         {#if issuesCount > 0}
           <span class="px-2 py-0.5 text-xs font-semibold bg-sky-500/10 text-sky-400 rounded-full border border-sky-500/20">
@@ -170,13 +170,13 @@
   <div class="p-3 border-t border-slate-900/60 bg-slate-950/40">
     <button
       onclick={() => onSelectTab("setup")}
-      class="w-full flex items-center space-x-2.5 px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'setup' ? 'bg-indigo-600/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
+      class="w-full flex items-center space-x-2 px-3 py-2 text-sm rounded-lg transition-all border {currentTab === 'setup' ? 'bg-indigo-600/15 text-indigo-200 border-indigo-500/20 font-medium shadow-sm shadow-indigo-500/5' : 'text-slate-400 hover:bg-slate-900/40 hover:text-slate-200 border-transparent'}"
     >
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
-      <span>Settings</span>
+      <span class="whitespace-nowrap">Settings</span>
     </button>
 
     <div class="mt-2 text-[10px] text-slate-500 text-center uppercase tracking-wider font-semibold">
