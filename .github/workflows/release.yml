@@ -129,8 +129,8 @@ jobs:
 
       - name: Create webkit.h umbrella header
         run: |
-          sudo mkdir -p /usr/include/webkit/webkit
-          sudo bash -c 'echo "#include <webkit2/webkit2.h>" > /usr/include/webkit/webkit/webkit.h'
+          sudo mkdir -p /usr/include/webkitgtk-4.1/webkit
+          sudo bash -c 'echo "#include <webkit2/webkit2.h>" > /usr/include/webkitgtk-4.1/webkit/webkit.h'
 
       - name: Fix webkitgtk pkg-config symlink
         run: |
