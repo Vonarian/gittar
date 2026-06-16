@@ -127,6 +127,13 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-4.0-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-dev 2>/dev/null || true
           echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> "$GITHUB_ENV"
 
+      - name: Fix webkit2gtk include path
+        run: |
+          INC_DIR=$(ls -d /usr/include/webkit* 2>/dev/null | head -1)
+          if [ -n "$INC_DIR" ]; then
+            sudo ln -sf "$INC_DIR/webkit" /usr/include/webkit
+          fi
+
       - name: Fix webkitgtk pkg-config symlink
         run: |
           PC=$(ls /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4*.pc 2>/dev/null | head -1)
