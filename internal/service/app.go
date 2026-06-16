@@ -681,11 +681,7 @@ func (s *AppService) MarkTodoAsDone(todoID int) error {
 	}
 
 	client := s.getGitLabClient(conf)
-	err = client.MarkTodoAsDone(todoID)
-	if err == nil {
-		s.ClearTelemetryCache()
-	}
-	return err
+	return client.MarkTodoAsDone(todoID)
 }
 
 // RetryPipeline retries a failed pipeline.
@@ -800,5 +796,22 @@ func (s *AppService) GetSingleMergeRequest(projectID int, mrIID int) (*gitlab.Me
 	client := s.getGitLabClient(conf)
 	return client.GetSingleMergeRequest(projectID, mrIID, time.Time{})
 }
-
+// RefreshTodosOnly fetches only the todos list without triggering a full telemetry refresh.
+// This is used as a lightweight background refresh after a todo is completed.
+func (s *AppService) RefreshTodosOnly() (*gitlab.TelemetryPayload, error) {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	client := s.getGitLabClient(conf)
+	
+	todos, err := client.GetTodos()
+	if err != nil {
+		return nil, err
+	}
+	
+	return &gitlab.TelemetryPayload{
+		Todos: todos,
+	}, nil
+}
 
