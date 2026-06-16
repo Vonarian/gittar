@@ -10,7 +10,7 @@ bin/
 *.exe
 *.test
 *.prof
-
+/vendor/
 # Wails directories
 .task/
 build/linux/appimage/build/

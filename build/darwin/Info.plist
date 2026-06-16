@@ -2,16 +2,18 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 	<dict>
+		<key>CFBundleDisplayName</key>
+		<string>Gittar</string>
 		<key>CFBundleExecutable</key>
 		<string>gittar</string>
 		<key>CFBundleGetInfoString</key>
-		<string>Gittar Desktop Control Panel</string>
+		<string>Gittar Desktop DevOps Panel</string>
 		<key>CFBundleIconFile</key>
 		<string>icons</string>
 		<key>CFBundleIconName</key>
 		<string>appicon</string>
 		<key>CFBundleIdentifier</key>
-		<string>com.vonarian.gittar</string>
+		<string>com.vonarian.gittar.app</string>
 		<key>CFBundleName</key>
 		<string>Gittar</string>
 		<key>CFBundlePackageType</key>

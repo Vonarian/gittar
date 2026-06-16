@@ -9,14 +9,14 @@
   
   <Identity 
     Name="com.example.gittar"
-    Publisher="CN=My Company"
+    Publisher="CN=Gittar"
     Version="0.1.0.0" 
     ProcessorArchitecture="arm64" />
   
   <Properties>
-    <DisplayName>My Product</DisplayName>
-    <PublisherDisplayName>My Company</PublisherDisplayName>
-    <Description>A gittar application</Description>
+    <DisplayName>Gittar</DisplayName>
+    <PublisherDisplayName>Gittar</PublisherDisplayName>
+    <Description>GitLab Enterprise Control Panel</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   
@@ -31,8 +31,8 @@
   <Applications>
     <Application Id="com.example.gittar" Executable="gittar" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="My Product"
-        Description="A gittar application"
+        DisplayName="Gittar"
+        Description="GitLab Enterprise Control Panel"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">

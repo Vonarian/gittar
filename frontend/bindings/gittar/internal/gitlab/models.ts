@@ -10,6 +10,58 @@ import { Create as $Create } from "@wailsio/runtime";
 import * as time$0 from "../../../time/models.js";
 
 /**
+ * Commit represents a GitLab commit.
+ */
+export class Commit {
+    "id": string;
+    "short_id": string;
+    "title": string;
+    "message": string;
+    "author_name": string;
+    "author_email": string;
+    "authored_date": time$0.Time;
+    "web_url": string;
+
+    /** Creates a new Commit instance. */
+    constructor($$source: Partial<Commit> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("short_id" in $$source)) {
+            this["short_id"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("message" in $$source)) {
+            this["message"] = "";
+        }
+        if (!("author_name" in $$source)) {
+            this["author_name"] = "";
+        }
+        if (!("author_email" in $$source)) {
+            this["author_email"] = "";
+        }
+        if (!("authored_date" in $$source)) {
+            this["authored_date"] = null;
+        }
+        if (!("web_url" in $$source)) {
+            this["web_url"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Commit instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Commit {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Commit($$parsedSource as Partial<Commit>);
+    }
+}
+
+/**
  * HeadPipeline represents the pipeline for the head commit of a Merge Request.
  */
 export class HeadPipeline {
@@ -38,6 +90,99 @@ export class HeadPipeline {
     static createFrom($$source: any = {}): HeadPipeline {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new HeadPipeline($$parsedSource as Partial<HeadPipeline>);
+    }
+}
+
+/**
+ * Issue represents a GitLab Issue.
+ */
+export class Issue {
+    "id": number;
+    "iid": number;
+    "project_id": number;
+    "title": string;
+    "description": string;
+    "state": string;
+    "author": User;
+    "assignees": User[];
+    "labels": string[];
+    "web_url": string;
+    "user_notes_count": number;
+    "upvotes": number;
+    "downvotes": number;
+    "created_at": time$0.Time;
+    "updated_at": time$0.Time;
+    "closed_at"?: time$0.Time | null;
+
+    /** Creates a new Issue instance. */
+    constructor($$source: Partial<Issue> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("iid" in $$source)) {
+            this["iid"] = 0;
+        }
+        if (!("project_id" in $$source)) {
+            this["project_id"] = 0;
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("state" in $$source)) {
+            this["state"] = "";
+        }
+        if (!("author" in $$source)) {
+            this["author"] = (new User());
+        }
+        if (!("assignees" in $$source)) {
+            this["assignees"] = [];
+        }
+        if (!("labels" in $$source)) {
+            this["labels"] = [];
+        }
+        if (!("web_url" in $$source)) {
+            this["web_url"] = "";
+        }
+        if (!("user_notes_count" in $$source)) {
+            this["user_notes_count"] = 0;
+        }
+        if (!("upvotes" in $$source)) {
+            this["upvotes"] = 0;
+        }
+        if (!("downvotes" in $$source)) {
+            this["downvotes"] = 0;
+        }
+        if (!("created_at" in $$source)) {
+            this["created_at"] = null;
+        }
+        if (!("updated_at" in $$source)) {
+            this["updated_at"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Issue instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Issue {
+        const $$createField6_0 = $$createType0;
+        const $$createField7_0 = $$createType1;
+        const $$createField8_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("author" in $$parsedSource) {
+            $$parsedSource["author"] = $$createField6_0($$parsedSource["author"]);
+        }
+        if ("assignees" in $$parsedSource) {
+            $$parsedSource["assignees"] = $$createField7_0($$parsedSource["assignees"]);
+        }
+        if ("labels" in $$parsedSource) {
+            $$parsedSource["labels"] = $$createField8_0($$parsedSource["labels"]);
+        }
+        return new Issue($$parsedSource as Partial<Issue>);
     }
 }
 
@@ -218,6 +363,54 @@ export class MergeRequest {
 }
 
 /**
+ * Note represents a GitLab comment or activity.
+ */
+export class Note {
+    "id": number;
+    "body": string;
+    "author": User;
+    "created_at": time$0.Time;
+    "updated_at": time$0.Time;
+    "system": boolean;
+
+    /** Creates a new Note instance. */
+    constructor($$source: Partial<Note> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("body" in $$source)) {
+            this["body"] = "";
+        }
+        if (!("author" in $$source)) {
+            this["author"] = (new User());
+        }
+        if (!("created_at" in $$source)) {
+            this["created_at"] = null;
+        }
+        if (!("updated_at" in $$source)) {
+            this["updated_at"] = null;
+        }
+        if (!("system" in $$source)) {
+            this["system"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Note instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Note {
+        const $$createField2_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("author" in $$parsedSource) {
+            $$parsedSource["author"] = $$createField2_0($$parsedSource["author"]);
+        }
+        return new Note($$parsedSource as Partial<Note>);
+    }
+}
+
+/**
  * Pipeline represents a GitLab Pipeline.
  */
 export class Pipeline {
@@ -380,6 +573,7 @@ export class TelemetryPayload {
     "todos": Todo[];
     "pipelines": PipelineWithJobs[];
     "mergeRequests": MergeRequest[];
+    "issues": Issue[];
     "username": string;
     "avatarUrl": string;
     "error"?: string;
@@ -394,6 +588,9 @@ export class TelemetryPayload {
         }
         if (!("mergeRequests" in $$source)) {
             this["mergeRequests"] = [];
+        }
+        if (!("issues" in $$source)) {
+            this["issues"] = [];
         }
         if (!("username" in $$source)) {
             this["username"] = "";
@@ -412,6 +609,7 @@ export class TelemetryPayload {
         const $$createField0_0 = $$createType9;
         const $$createField1_0 = $$createType11;
         const $$createField2_0 = $$createType13;
+        const $$createField3_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("todos" in $$parsedSource) {
             $$parsedSource["todos"] = $$createField0_0($$parsedSource["todos"]);
@@ -421,6 +619,9 @@ export class TelemetryPayload {
         }
         if ("mergeRequests" in $$parsedSource) {
             $$parsedSource["mergeRequests"] = $$createField2_0($$parsedSource["mergeRequests"]);
+        }
+        if ("issues" in $$parsedSource) {
+            $$parsedSource["issues"] = $$createField3_0($$parsedSource["issues"]);
         }
         return new TelemetryPayload($$parsedSource as Partial<TelemetryPayload>);
     }
@@ -477,7 +678,7 @@ export class Todo {
      * Creates a new Todo instance from a string or object.
      */
     static createFrom($$source: any = {}): Todo {
-        const $$createField1_0 = $$createType14;
+        const $$createField1_0 = $$createType16;
         const $$createField2_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("project" in $$parsedSource) {
@@ -549,4 +750,6 @@ const $$createType10 = PipelineWithJobs.createFrom;
 const $$createType11 = $Create.Array($$createType10);
 const $$createType12 = MergeRequest.createFrom;
 const $$createType13 = $Create.Array($$createType12);
-const $$createType14 = ProjectRef.createFrom;
+const $$createType14 = Issue.createFrom;
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = ProjectRef.createFrom;

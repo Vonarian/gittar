@@ -1,13 +1,26 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import type { Todo } from "../../../bindings/gittar/internal/gitlab/models";
   import { Browser, Clipboard } from "@wailsio/runtime";
+  import { MarkTodoAsDone } from "../../../bindings/gittar/internal/service/appservice";
 
   interface Props {
     todos: Todo[];
+    onRefresh?: () => void;
   }
 
-  let { todos = [] }: Props = $props();
+  let { todos = [], onRefresh }: Props = $props();
+
+  // View mode: 'list' or 'kanban'
+  let viewMode = $state("list");
+
+  // Drag and drop state
+  let draggedTodo = $state<Todo | null>(null);
+  let isDraggingOverDone = $state(false);
+
+  // Local session cache for completed todos
+  let recentlyDoneTodos = $state<Todo[]>([]);
+  let isMarkingDone = $state<Record<number, boolean>>({});
 
   // Context menu state
   let contextMenu = $state<{ x: number; y: number; link: string } | null>(null);
@@ -27,7 +40,22 @@
     contextMenu = null;
   }
 
+  // Search & Filter state variables
+  let searchQuery = $state("");
+  let groupFilter = $state("all");
+  let projectFilter = $state("all");
+  let actionFilter = $state("all");
+  let userFilter = $state("all");
+
+  // Load view mode and filters from localStorage on mount
   onMount(() => {
+    viewMode = localStorage.getItem("gittar_view_mode_todos") || "list";
+    searchQuery = localStorage.getItem("gittar_filter_todos_search") || "";
+    groupFilter = localStorage.getItem("gittar_filter_todos_group") || "all";
+    projectFilter = localStorage.getItem("gittar_filter_todos_project") || "all";
+    actionFilter = localStorage.getItem("gittar_filter_todos_action") || "all";
+    userFilter = localStorage.getItem("gittar_filter_todos_user") || "all";
+
     window.addEventListener("click", closeContextMenu);
     window.addEventListener("contextmenu", closeContextMenu);
   });
@@ -37,12 +65,18 @@
     window.removeEventListener("contextmenu", closeContextMenu);
   });
 
-  // Search & Filter state variables
-  let searchQuery = $state("");
-  let groupFilter = $state("all");
-  let projectFilter = $state("all");
-  let actionFilter = $state("all");
-  let userFilter = $state("all");
+  // Persist view mode and filters using effects whenever they change
+  $effect(() => {
+    localStorage.setItem("gittar_view_mode_todos", viewMode);
+  });
+
+  $effect(() => {
+    localStorage.setItem("gittar_filter_todos_search", searchQuery);
+    localStorage.setItem("gittar_filter_todos_group", groupFilter);
+    localStorage.setItem("gittar_filter_todos_project", projectFilter);
+    localStorage.setItem("gittar_filter_todos_action", actionFilter);
+    localStorage.setItem("gittar_filter_todos_user", userFilter);
+  });
 
   // Dynamically extract unique values from the todo list to populate filters
   const uniqueGroups = $derived([
@@ -85,12 +119,92 @@
     })
   );
 
+  const activeTodos = $derived(
+    filteredTodos.filter((t) => !recentlyDoneTodos.some((rd) => rd.id === t.id))
+  );
+
+  const isFilterActive = $derived(
+    searchQuery !== "" ||
+    groupFilter !== "all" ||
+    projectFilter !== "all" ||
+    actionFilter !== "all" ||
+    userFilter !== "all"
+  );
+
+  $effect(() => {
+    const allTodos = todos;
+    untrack(() => {
+      recentlyDoneTodos = recentlyDoneTodos.filter((rd) => allTodos.some((t) => t.id === rd.id));
+    });
+  });
+
   function resetFilters() {
     searchQuery = "";
     groupFilter = "all";
     projectFilter = "all";
     actionFilter = "all";
     userFilter = "all";
+  }
+
+  // API Call to mark a todo as done/read
+  async function markAsDone(todoId: number) {
+    if (isMarkingDone[todoId]) return;
+    isMarkingDone[todoId] = true;
+
+    // Optimistic UI update: move to recentlyDone immediately for instant visual feedback
+    const found = todos.find((t) => t.id === todoId);
+    if (found) {
+      recentlyDoneTodos = [found, ...recentlyDoneTodos];
+    }
+
+    try {
+      await MarkTodoAsDone(todoId);
+      // NOTE: We intentionally do NOT call onRefresh here.
+      // The optimistic UI update already removes the item from view.
+      // The background poll will naturally refresh the todos list on its next cycle.
+    } catch (e: any) {
+      // Roll back optimistic update on failure
+      recentlyDoneTodos = recentlyDoneTodos.filter((rd) => rd.id !== todoId);
+      console.error("Failed to mark todo as done:", e);
+      alert("Failed to mark todo as done: " + e.message);
+    } finally {
+      isMarkingDone[todoId] = false;
+    }
+  }
+
+  // Drag and Drop Event Handlers
+  function handleDragStart(e: DragEvent, todo: Todo) {
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", todo.id.toString());
+    }
+    setTimeout(() => {
+      draggedTodo = todo;
+    }, 0);
+  }
+
+  function handleDragEnd() {
+    draggedTodo = null;
+    isDraggingOverDone = false;
+  }
+
+  function handleDragOverDone(e: DragEvent) {
+    e.preventDefault();
+    isDraggingOverDone = true;
+  }
+
+  function handleDragLeaveDone() {
+    isDraggingOverDone = false;
+  }
+
+  async function handleDropDone(e: DragEvent) {
+    e.preventDefault();
+    isDraggingOverDone = false;
+    if (draggedTodo) {
+      const todoId = draggedTodo.id;
+      await markAsDone(todoId);
+      draggedTodo = null;
+    }
   }
 
   // Helper to format date
@@ -147,6 +261,28 @@
         {/if}
       </h2>
       <p class="text-slate-400 text-xs mt-1">Pending actions and notifications requiring your immediate attention.</p>
+    </div>
+
+    <!-- Layout Toggle Options -->
+    <div class="flex items-center bg-slate-950/60 border border-slate-900 rounded-lg p-0.5 shadow-inner">
+      <button
+        onclick={() => (viewMode = "list")}
+        class="px-3 py-1.5 text-xs font-semibold rounded-md transition flex items-center space-x-1.5 {viewMode === 'list' ? 'bg-indigo-650 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+        <span>List</span>
+      </button>
+      <button
+        onclick={() => (viewMode = "kanban")}
+        class="px-3 py-1.5 text-xs font-semibold rounded-md transition flex items-center space-x-1.5 {viewMode === 'kanban' ? 'bg-indigo-650 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+        </svg>
+        <span>Kanban</span>
+      </button>
     </div>
   </div>
 
@@ -220,8 +356,8 @@
   {/if}
 
   <!-- Content Area -->
-  <div class="flex-1 overflow-y-auto p-6">
-    {#if todos.length === 0}
+  <div class="flex-1 overflow-hidden relative">
+    {#if activeTodos.length === 0 && !isFilterActive}
       <!-- Premium Inbox Zero State -->
       <div class="h-[70%] flex flex-col items-center justify-center text-center">
         <div class="w-12 h-12 rounded-full bg-indigo-950/40 border border-indigo-900/50 flex items-center justify-center text-indigo-400 mb-4 animate-pulse-glow">
@@ -232,7 +368,7 @@
         <h3 class="text-base font-semibold text-slate-200">Inbox Zero</h3>
         <p class="text-slate-500 text-sm mt-1 max-w-[280px]">You are completely caught up! No pending todos on your queue.</p>
       </div>
-    {:else if filteredTodos.length === 0}
+    {:else if activeTodos.length === 0 && isFilterActive && viewMode === "list"}
       <!-- Empty Filter State -->
       <div class="h-[70%] flex flex-col items-center justify-center text-center">
         <div class="w-12 h-12 rounded-full bg-slate-950/40 border border-slate-900 flex items-center justify-center text-slate-500 mb-4">
@@ -249,10 +385,10 @@
           Reset Filters
         </button>
       </div>
-    {:else}
+    {:else if viewMode === "list"}
       <!-- High Density List -->
-      <div class="space-y-2.5">
-        {#each filteredTodos as todo (todo.id)}
+      <div class="h-full overflow-y-auto p-6 space-y-2.5">
+        {#each activeTodos as todo (todo.id)}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             oncontextmenu={(e) => handleContextMenu(e, todo.target_url)}
@@ -308,11 +444,26 @@
               </div>
             </div>
 
-            <!-- Hover Action Button -->
-            <div class="opacity-0 group-hover:opacity-100 transition duration-150 self-center flex items-center pr-1.5">
+            <!-- Hover Action Button & Mark as Done -->
+            <div class="opacity-0 group-hover:opacity-100 transition duration-150 self-center flex items-center space-x-2 pr-1.5">
+              <button
+                onclick={(e) => { e.stopPropagation(); markAsDone(todo.id); }}
+                disabled={isMarkingDone[todo.id]}
+                class="flex items-center justify-center p-2 bg-emerald-600/10 hover:bg-emerald-600 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 hover:text-white rounded-lg transition disabled:opacity-40"
+                title="Mark as Done"
+              >
+                {#if isMarkingDone[todo.id]}
+                  <div class="w-3.5 h-3.5 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+                {:else}
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                  </svg>
+                {/if}
+              </button>
+
               <button
                 onclick={(e) => { e.stopPropagation(); Browser.OpenURL(todo.target_url); }}
-                class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-850 hover:bg-slate-850 border border-slate-700 hover:border-slate-600 text-xs font-medium text-slate-200 rounded-lg transition"
+                class="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-850 hover:bg-slate-800 border border-slate-700 hover:border-slate-600 text-xs font-medium text-slate-200 rounded-lg transition"
               >
                 <span>View</span>
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -322,6 +473,172 @@
             </div>
           </div>
         {/each}
+      </div>
+    {:else}
+      <!-- Kanban Board View -->
+      <div class="h-full w-full overflow-x-auto p-6 flex space-x-6">
+        <!-- Column 1: Pending Inbox -->
+        <div class="w-1/2 flex flex-col bg-slate-900/15 border border-slate-900/80 rounded-2xl p-4 min-w-[320px] max-w-[500px]">
+          <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-900/60 shrink-0">
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+              <h3 class="font-bold text-slate-200 text-sm">Pending Inbox</h3>
+            </div>
+            <span class="px-2 py-0.5 text-xs font-semibold bg-indigo-500/10 text-indigo-400 rounded-full border border-indigo-500/20">
+              {activeTodos.length}
+            </span>
+          </div>
+
+          <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+            {#if activeTodos.length === 0}
+              <div class="h-32 flex flex-col items-center justify-center text-center text-slate-500 text-xs border border-dashed border-slate-800/80 rounded-xl bg-slate-950/5">
+                No pending items.
+              </div>
+            {/if}
+
+            {#each activeTodos as todo (todo.id)}
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                draggable="true"
+                ondragstart={(e) => handleDragStart(e, todo)}
+                ondragend={handleDragEnd}
+                class="group flex flex-col p-3.5 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl cursor-grab active:cursor-grabbing transition-all duration-200 relative select-none"
+                class:opacity-40={draggedTodo?.id === todo.id}
+              >
+                <!-- Drag Grip Icon -->
+                <div class="absolute right-3 top-3 opacity-0 group-hover:opacity-40 transition duration-150 text-slate-400">
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M7 2a2 2 0 11-4 0 2 2 0 014 0zM7 8a2 2 0 11-4 0 2 2 0 014 0zM7 14a2 2 0 11-4 0 2 2 0 014 0zM13 2a2 2 0 11-4 0 2 2 0 014 0zM13 8a2 2 0 11-4 0 2 2 0 014 0zM13 14a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                  {#if todo.author?.avatar_url}
+                    <img src={todo.author.avatar_url} alt={todo.author.name} class="w-5 h-5 rounded-full border border-slate-800" />
+                  {:else}
+                    <div class="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-semibold text-slate-400 border border-slate-700">
+                      {todo.author?.name?.charAt(0) || "U"}
+                    </div>
+                  {/if}
+                  <span class="text-xs text-slate-450 truncate max-w-[140px] font-medium">{todo.author?.name}</span>
+                  <span class="text-slate-650 text-[10px]">•</span>
+                  <span class="text-[10px] text-slate-500">{formatRelativeTime(todo.created_at)}</span>
+                </div>
+
+                <div class="text-xs text-indigo-400 font-semibold mt-1.5 truncate max-w-[240px]">
+                  {todo.project?.path_with_namespace}
+                </div>
+
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                <p
+                  onclick={() => Browser.OpenURL(todo.target_url)}
+                  class="text-sm text-slate-200 mt-2 font-medium leading-normal hover:text-indigo-400 transition cursor-pointer select-none line-clamp-2"
+                  title={todo.body}
+                >
+                  {todo.body}
+                </p>
+
+                <div class="flex items-center justify-between mt-3">
+                  <span class="px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded border {getActionBadgeStyle(todo.action_name)}">
+                    {formatActionLabel(todo.action_name)}
+                  </span>
+
+                  <button
+                    onclick={(e) => { e.stopPropagation(); markAsDone(todo.id); }}
+                    disabled={isMarkingDone[todo.id]}
+                    class="flex items-center space-x-1 px-2.5 py-1 bg-emerald-650/10 hover:bg-emerald-650 border border-emerald-500/25 hover:border-emerald-500 text-emerald-400 hover:text-white rounded-md text-[10px] font-bold transition disabled:opacity-40"
+                  >
+                    {#if isMarkingDone[todo.id]}
+                      <div class="w-3 h-3 border border-emerald-400 border-t-transparent rounded-full animate-spin"></div>
+                    {:else}
+                      <span>Done</span>
+                    {/if}
+                  </button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Column 2: Mark as Done / Recently Completed -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          ondragover={handleDragOverDone}
+          ondragleave={handleDragLeaveDone}
+          ondrop={handleDropDone}
+          class="w-1/2 flex flex-col rounded-2xl p-4 min-w-[320px] max-w-[500px] transition-all duration-200 border-2 select-none {isDraggingOverDone ? 'bg-indigo-650/5 border-indigo-500/80 shadow-lg shadow-indigo-600/5' : draggedTodo ? 'bg-slate-900/10 border-dashed border-indigo-500/30' : 'bg-slate-900/15 border-slate-900/80'}"
+        >
+          <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-900/60 shrink-0">
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+              <h3 class="font-bold text-slate-200 text-sm">Mark as Done / Read</h3>
+            </div>
+            {#if recentlyDoneTodos.length > 0}
+              <span class="px-2 py-0.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20">
+                {recentlyDoneTodos.length}
+              </span>
+            {/if}
+          </div>
+
+          <!-- Drag and Drop Drop Zone Overlay -->
+          {#if draggedTodo && recentlyDoneTodos.length === 0}
+            <div class="flex-1 flex flex-col items-center justify-center text-center p-6 pointer-events-none">
+              <div class="w-14 h-14 rounded-full border-2 border-dashed border-indigo-500/50 flex items-center justify-center text-indigo-400 mb-3 animate-pulse">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h4 class="text-sm font-semibold text-slate-250">Drop card to Mark as Done</h4>
+              <p class="text-slate-500 text-xs mt-1 max-w-[180px]">Drop files here to mark them read on GitLab.</p>
+            </div>
+          {:else}
+            <div class="flex-1 overflow-y-auto space-y-3 pr-1">
+              <!-- Drop instruction visual helper when drag active and items exist -->
+              {#if draggedTodo}
+                <div class="flex items-center justify-center p-3 border-2 border-dashed border-indigo-500/40 rounded-xl bg-indigo-500/5 text-xs font-bold text-indigo-300 text-center animate-pulse pointer-events-none">
+                  Drop card here to Complete
+                </div>
+              {/if}
+
+              {#if recentlyDoneTodos.length === 0}
+                <div class="h-32 flex flex-col items-center justify-center text-center text-slate-500 text-xs border border-dashed border-slate-850 rounded-xl bg-slate-950/5">
+                  Drag items from "Pending Inbox" and drop them here to resolve.
+                </div>
+              {:else}
+                {#each recentlyDoneTodos as todo (todo.id)}
+                  <div class="flex flex-col p-3.5 bg-slate-950/15 border border-slate-900/40 rounded-xl relative opacity-60 hover:opacity-95 transition-opacity select-none duration-150">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center space-x-2">
+                        {#if todo.author?.avatar_url}
+                          <img src={todo.author.avatar_url} alt={todo.author.name} class="w-5 h-5 rounded-full border border-slate-800" />
+                        {/if}
+                        <span class="text-xs text-slate-450 truncate max-w-[120px] font-medium">{todo.author?.name}</span>
+                      </div>
+                      <span class="px-2 py-0.5 text-[9px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 rounded">
+                        COMPLETED
+                      </span>
+                    </div>
+
+                    <div class="text-[11px] text-indigo-500 font-semibold mt-1.5 truncate max-w-[240px]">
+                      {todo.project?.path_with_namespace}
+                    </div>
+
+                    <!-- svelte-ignore a11y_click_events_have_key_events -->
+                    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                    <p
+                      onclick={() => Browser.OpenURL(todo.target_url)}
+                      class="text-xs text-slate-350 mt-2 font-medium leading-normal hover:text-indigo-400 transition cursor-pointer select-none line-clamp-2"
+                      title={todo.body}
+                    >
+                      {todo.body}
+                    </p>
+                  </div>
+                {/each}
+              {/if}
+            </div>
+          {/if}
+        </div>
       </div>
     {/if}
   </div>

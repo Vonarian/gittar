@@ -1,24 +1,191 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import type { MergeRequest } from "../../../bindings/gittar/internal/gitlab/models";
   import { Browser, Clipboard } from "@wailsio/runtime";
-  import { MergeMergeRequest, CloseMergeRequest } from "../../../bindings/gittar/internal/service/appservice";
+  import { MergeMergeRequest, CloseMergeRequest, GetSingleMergeRequest } from "../../../bindings/gittar/internal/service/appservice";
 
   interface Props {
     mergeRequests: MergeRequest[];
     username: string;
     onRefresh?: () => void;
+    onSelectMR: (mr: MergeRequest) => void;
   }
 
-  let { mergeRequests = [], username, onRefresh }: Props = $props();
+  let { mergeRequests = [], username, onRefresh, onSelectMR }: Props = $props();
+
+  interface TransitionMR extends MergeRequest {
+    _glowActive?: boolean;
+    _isFadingOut?: boolean;
+  }
+
+  let localMRs = $state<TransitionMR[]>([]);
+
+  interface MRTimerInfo {
+    mrId: number;
+    timeLeft: number;
+    lastTick: number;
+    timeoutId: any;
+    paused: boolean;
+  }
+  const mrTimers = new Map<number, MRTimerInfo>();
+
+  async function checkMRTransition(mr: TransitionMR) {
+    try {
+      const fresh = await GetSingleMergeRequest(mr.project_id, mr.iid);
+      if (fresh && (fresh.state === "merged" || fresh.state === "closed")) {
+        updateMRStateLocally(mr.id, fresh.state as any);
+      } else {
+        removeMRLocally(mr.id);
+      }
+    } catch (e) {
+      console.error("Failed to check MR transition:", e);
+      removeMRLocally(mr.id);
+    }
+  }
+
+  function updateMRStateLocally(mrId: number, newState: "merged" | "closed") {
+    const idx = localMRs.findIndex(m => m.id === mrId);
+    if (idx !== -1) {
+      localMRs[idx].state = newState;
+      if (newState === "merged") {
+        localMRs[idx].merged_at = new Date().toISOString();
+      } else {
+        localMRs[idx].closed_at = new Date().toISOString();
+      }
+      if (document.hasFocus()) {
+        startMRTimer(mrId, 5000);
+      } else {
+        localMRs[idx]._glowActive = true;
+        localMRs[idx]._isFadingOut = false;
+      }
+    }
+  }
+
+  function removeMRLocally(mrId: number) {
+    clearMRTimer(mrId);
+    localMRs = localMRs.filter(m => m.id !== mrId);
+  }
+
+  function startMRTimer(mrId: number, durationMs = 5000) {
+    clearMRTimer(mrId);
+
+    const timerInfo: MRTimerInfo = {
+      mrId,
+      timeLeft: durationMs,
+      lastTick: Date.now(),
+      timeoutId: null,
+      paused: false
+    };
+
+    const mr = localMRs.find(m => m.id === mrId);
+    if (mr) {
+      mr._glowActive = true;
+      mr._isFadingOut = false;
+    }
+
+    timerInfo.timeoutId = setTimeout(() => handleTimerExpiry(mrId), durationMs);
+    mrTimers.set(mrId, timerInfo);
+  }
+
+  function clearMRTimer(mrId: number) {
+    const timer = mrTimers.get(mrId);
+    if (timer) {
+      if (timer.timeoutId) clearTimeout(timer.timeoutId);
+      mrTimers.delete(mrId);
+    }
+  }
+
+  function handleTimerExpiry(mrId: number) {
+    mrTimers.delete(mrId);
+    const mr = localMRs.find(m => m.id === mrId);
+    if (mr) {
+      mr._glowActive = false;
+      mr._isFadingOut = true;
+
+      // Wait 400ms for transition animation to finish before removing from list
+      setTimeout(() => {
+        localMRs = localMRs.filter(m => m.id !== mrId);
+      }, 400);
+    }
+  }
+
+  function handleMouseEnter(mrId: number) {
+    const timer = mrTimers.get(mrId);
+    if (!timer || timer.paused) return;
+
+    if (timer.timeoutId) clearTimeout(timer.timeoutId);
+    timer.timeoutId = null;
+
+    const elapsed = Date.now() - timer.lastTick;
+    timer.timeLeft = Math.max(0, timer.timeLeft - elapsed);
+    timer.paused = true;
+  }
+
+  function handleMouseLeave(mrId: number) {
+    const timer = mrTimers.get(mrId);
+    if (!timer || !timer.paused) return;
+
+    timer.lastTick = Date.now();
+    timer.paused = false;
+    timer.timeoutId = setTimeout(() => handleTimerExpiry(mrId), timer.timeLeft);
+  }
+
+  function handleWindowFocus() {
+    console.log("[MRsPanel] Window focused, checking for pending transition timers...");
+    for (const mr of localMRs) {
+      if ((mr.state === "merged" || mr.state === "closed") && mr._glowActive && !mrTimers.has(mr.id)) {
+        startMRTimer(mr.id, 5000);
+      }
+    }
+  }
+
+  function syncMRs(newMRs: MergeRequest[]) {
+    const newMRMap = new Map<number, MergeRequest>();
+    for (const mr of newMRs) {
+      newMRMap.set(mr.id, mr);
+    }
+
+    // Keep existing items or check transitions for vanished ones
+    for (const localMR of localMRs) {
+      if (!newMRMap.has(localMR.id)) {
+        if (localMR.state === "opened") {
+          checkMRTransition(localMR);
+        }
+      } else {
+        const newMR = newMRMap.get(localMR.id)!;
+        Object.assign(localMR, newMR);
+      }
+    }
+
+    // Add new MRs
+    for (const newMR of newMRs) {
+      if (!localMRs.some(m => m.id === newMR.id)) {
+        localMRs.push({ ...newMR, _glowActive: false, _isFadingOut: false });
+      }
+    }
+  }
+
+  $effect(() => {
+    const newMRs = mergeRequests;
+    untrack(() => {
+      syncMRs(newMRs);
+    });
+  });
 
   let activeMRTab = $state<"all" | "assigned" | "authored" | "review">("all");
+  let viewMode = $state("list");
 
   // Search & Filter state variables
   let searchQuery = $state("");
   let groupFilter = $state("all");
   let projectFilter = $state("all");
   let userFilter = $state("all");
+  let involvementFilter = $state("all");
+
+  // Drag-and-drop state
+  let draggedMR = $state<MergeRequest | null>(null);
+  let isDraggingOverMerge = $state(false);
+  let isDraggingOverClose = $state(false);
 
   // Local state for processing actions (e.g. merging or closing)
   let processingMRs = $state<Record<number, "merging" | "closing" | null>>({});
@@ -41,6 +208,14 @@
   }
 
   onMount(() => {
+    viewMode = localStorage.getItem("gittar_view_mode_mrs") || "list";
+    searchQuery = localStorage.getItem("gittar_filter_mrs_search") || "";
+    groupFilter = localStorage.getItem("gittar_filter_mrs_group") || "all";
+    projectFilter = localStorage.getItem("gittar_filter_mrs_project") || "all";
+    userFilter = localStorage.getItem("gittar_filter_mrs_user") || "all";
+    involvementFilter = localStorage.getItem("gittar_filter_mrs_involvement") || "all";
+    activeMRTab = (localStorage.getItem("gittar_filter_mrs_tab") || "all") as any;
+
     window.addEventListener("click", closeContextMenu);
     window.addEventListener("contextmenu", closeContextMenu);
   });
@@ -48,6 +223,23 @@
   onDestroy(() => {
     window.removeEventListener("click", closeContextMenu);
     window.removeEventListener("contextmenu", closeContextMenu);
+    for (const timer of mrTimers.values()) {
+      if (timer.timeoutId) clearTimeout(timer.timeoutId);
+    }
+    mrTimers.clear();
+  });
+
+  $effect(() => {
+    localStorage.setItem("gittar_view_mode_mrs", viewMode);
+  });
+
+  $effect(() => {
+    localStorage.setItem("gittar_filter_mrs_search", searchQuery);
+    localStorage.setItem("gittar_filter_mrs_group", groupFilter);
+    localStorage.setItem("gittar_filter_mrs_project", projectFilter);
+    localStorage.setItem("gittar_filter_mrs_user", userFilter);
+    localStorage.setItem("gittar_filter_mrs_involvement", involvementFilter);
+    localStorage.setItem("gittar_filter_mrs_tab", activeMRTab);
   });
 
   async function handleMerge(projectId: number, mrIID: number, mrId: number) {
@@ -58,6 +250,7 @@
     processingMRs[mrId] = "merging";
     try {
       await MergeMergeRequest(projectId, mrIID);
+      updateMRStateLocally(mrId, "merged");
       if (onRefresh) onRefresh();
     } catch (e: any) {
       console.error("Failed to merge MR:", e);
@@ -75,6 +268,7 @@
     processingMRs[mrId] = "closing";
     try {
       await CloseMergeRequest(projectId, mrIID);
+      updateMRStateLocally(mrId, "closed");
       if (onRefresh) onRefresh();
     } catch (e: any) {
       console.error("Failed to close MR:", e);
@@ -98,41 +292,41 @@
 
   // Dynamic filtering
   const assignedMRs = $derived(
-    mergeRequests.filter((mr) =>
+    localMRs.filter((mr) =>
       (mr.assignees || []).some((a) => a.username === username)
     )
   );
 
   const authoredMRs = $derived(
-    mergeRequests.filter((mr) => mr.author?.username === username)
+    localMRs.filter((mr) => mr.author?.username === username)
   );
 
   const reviewRequests = $derived(
-    mergeRequests.filter((mr) =>
+    localMRs.filter((mr) =>
       (mr.reviewers || []).some((r) => r.username === username)
     )
   );
 
   const uniqueGroups = $derived([
-    ...new Set(mergeRequests.map((mr) => getProjectPath(mr.web_url).split("/")[0]).filter(Boolean)),
+    ...new Set(localMRs.map((mr) => getProjectPath(mr.web_url).split("/")[0]).filter(Boolean)),
   ]);
 
   const uniqueProjects = $derived([
-    ...new Set(mergeRequests.map((mr) => getProjectPath(mr.web_url)).filter(Boolean)),
+    ...new Set(localMRs.map((mr) => getProjectPath(mr.web_url)).filter(Boolean)),
   ]);
 
   const uniqueUsers = $derived([
     ...new Set([
-      ...mergeRequests.map((mr) => mr.author?.name),
-      ...mergeRequests.flatMap((mr) => (mr.assignees || []).map((a) => a.name)),
-      ...mergeRequests.flatMap((mr) => (mr.reviewers || []).map((r) => r.name)),
+      ...localMRs.map((mr) => mr.author?.name),
+      ...localMRs.flatMap((mr) => (mr.assignees || []).map((a) => a.name)),
+      ...localMRs.flatMap((mr) => (mr.reviewers || []).map((r) => r.name)),
     ].filter(Boolean)),
   ]);
 
   const baseList = $derived.by(() => {
     switch (activeMRTab) {
       case "all":
-        return mergeRequests;
+        return localMRs;
       case "assigned":
         return assignedMRs;
       case "authored":
@@ -165,15 +359,58 @@
         (mr.assignees || []).some((a) => a.name === userFilter) ||
         (mr.reviewers || []).some((r) => r.name === userFilter);
 
-      return matchesSearch && matchesGroup && matchesProject && matchesUser;
+      const matchesInvolvement =
+        involvementFilter === "all" ||
+        mr.author?.username === username ||
+        (mr.assignees || []).some((a) => a.username === username) ||
+        (mr.reviewers || []).some((r) => r.username === username);
+
+      return matchesSearch && matchesGroup && matchesProject && matchesUser && matchesInvolvement;
     })
   );
+
+  const sortedFilteredMRs = $derived(
+    [...filteredMRs].sort((a, b) => {
+      const aFlashing = a.state === "merged" || a.state === "closed";
+      const bFlashing = b.state === "merged" || b.state === "closed";
+      if (aFlashing && !bFlashing) return -1;
+      if (!aFlashing && bFlashing) return 1;
+      if (aFlashing && bFlashing) {
+        const aTime = new Date(a.merged_at || a.closed_at || a.updated_at).getTime();
+        const bTime = new Date(b.merged_at || b.closed_at || b.updated_at).getTime();
+        return bTime - aTime;
+      }
+      return 0;
+    })
+  );
+
+  // Kanban Derived Columns
+  const draftMRs = $derived(sortedFilteredMRs.filter((mr) => (mr.work_in_progress || mr.draft) && mr.state === "opened"));
+  const reviewingMRs = $derived(
+    sortedFilteredMRs.filter(
+      (mr) =>
+        !(mr.work_in_progress || mr.draft) &&
+        mr.state === "opened" &&
+        (mr.reviewers || []).some((r) => r.username === username)
+    )
+  );
+  const inProgressMRs = $derived(
+    sortedFilteredMRs.filter(
+      (mr) =>
+        !(mr.work_in_progress || mr.draft) &&
+        mr.state === "opened" &&
+        !(mr.reviewers || []).some((r) => r.username === username)
+    )
+  );
+  const mergedMRs = $derived(sortedFilteredMRs.filter((mr) => mr.state === "merged"));
+  const closedMRs = $derived(sortedFilteredMRs.filter((mr) => mr.state === "closed"));
 
   function resetFilters() {
     searchQuery = "";
     groupFilter = "all";
     projectFilter = "all";
     userFilter = "all";
+    involvementFilter = "all";
   }
 
   function getLabelColorHash(label: string): string {
@@ -235,7 +472,68 @@
     }
     return "border-l-slate-800/60";
   }
+
+  // Drag Handlers
+  function handleDragStart(e: DragEvent, mr: MergeRequest) {
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", mr.id.toString());
+    }
+    setTimeout(() => {
+      draggedMR = mr;
+    }, 0);
+  }
+
+  function handleDragEnd() {
+    draggedMR = null;
+    isDraggingOverMerge = false;
+    isDraggingOverClose = false;
+  }
+
+  function handleDragOverMerge(e: DragEvent) {
+    e.preventDefault();
+    isDraggingOverMerge = true;
+  }
+
+  function handleDragLeaveMerge() {
+    isDraggingOverMerge = false;
+  }
+
+  async function handleDropMerge(e: DragEvent) {
+    e.preventDefault();
+    isDraggingOverMerge = false;
+    if (draggedMR) {
+      const mr = draggedMR;
+      if (mr.state === "opened") {
+        await handleMerge(mr.project_id, mr.iid, mr.id);
+      }
+      draggedMR = null;
+    }
+  }
+
+  function handleDragOverClose(e: DragEvent) {
+    e.preventDefault();
+    isDraggingOverClose = true;
+  }
+
+  function handleDragLeaveClose() {
+    isDraggingOverClose = false;
+  }
+
+  async function handleDropClose(e: DragEvent) {
+    e.preventDefault();
+    isDraggingOverClose = false;
+    if (draggedMR) {
+      const mr = draggedMR;
+      if (mr.state === "opened") {
+        await handleClose(mr.project_id, mr.iid, mr.id);
+      }
+      draggedMR = null;
+    }
+  }
 </script>
+
+<svelte:window onfocus={handleWindowFocus} />
 
 <div class="h-full flex flex-col">
   <!-- Panel Header -->
@@ -243,6 +541,28 @@
     <div>
       <h2 class="text-xl font-semibold text-white">MR Gatekeeper</h2>
       <p class="text-slate-400 text-xs mt-1">Aggregate merge requests assigned to, reviewed by, or authored by you.</p>
+    </div>
+
+    <!-- Layout Toggle Options -->
+    <div class="flex items-center bg-slate-950/60 border border-slate-900 rounded-lg p-0.5 shadow-inner">
+      <button
+        onclick={() => (viewMode = "list")}
+        class="px-3 py-1.5 text-xs font-semibold rounded-md transition flex items-center space-x-1.5 {viewMode === 'list' ? 'bg-indigo-650 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+        <span>List</span>
+      </button>
+      <button
+        onclick={() => (viewMode = "kanban")}
+        class="px-3 py-1.5 text-xs font-semibold rounded-md transition flex items-center space-x-1.5 {viewMode === 'kanban' ? 'bg-indigo-650 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'}"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+        </svg>
+        <span>Kanban</span>
+      </button>
     </div>
   </div>
 
@@ -253,9 +573,9 @@
       class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-2 {activeMRTab === 'all' ? 'bg-slate-900 text-white border border-slate-800' : 'text-slate-400 hover:text-slate-200'}"
     >
       <span>All</span>
-      {#if mergeRequests.length > 0}
-        <span class="px-1.5 py-0.5 text-[10px] bg-slate-800 text-slate-350 rounded-full">
-          {mergeRequests.length}
+      {#if localMRs.length > 0}
+        <span class="px-1.5 py-0.5 text-[10px] bg-slate-800 text-slate-355 rounded-full">
+          {localMRs.length}
         </span>
       {/if}
     </button>
@@ -278,7 +598,7 @@
     >
       <span>Authored by Me</span>
       {#if authoredMRs.length > 0}
-        <span class="px-1.5 py-0.5 text-[10px] bg-slate-800 text-slate-350 rounded-full">
+        <span class="px-1.5 py-0.5 text-[10px] bg-slate-800 text-slate-355 rounded-full">
           {authoredMRs.length}
         </span>
       {/if}
@@ -298,7 +618,7 @@
   </div>
 
   <!-- Filter & Search Toolbar -->
-  {#if mergeRequests.length > 0}
+  {#if localMRs.length > 0}
     <div class="px-6 py-3 border-b border-slate-900/40 bg-slate-950/20 flex flex-wrap items-center gap-3 select-none">
       <!-- Search Input -->
       <div class="relative w-48">
@@ -343,8 +663,17 @@
         {/each}
       </select>
 
+      <!-- Involvement Filter -->
+      <select
+        bind:value={involvementFilter}
+        class="px-2 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 outline-none cursor-pointer focus:border-indigo-650"
+      >
+        <option value="all">All MRs</option>
+        <option value="mine">My MRs Only</option>
+      </select>
+
       <!-- Reset Filters Button -->
-      {#if searchQuery !== "" || groupFilter !== "all" || projectFilter !== "all" || userFilter !== "all"}
+      {#if searchQuery !== "" || groupFilter !== "all" || projectFilter !== "all" || userFilter !== "all" || involvementFilter !== "all"}
         <button
           onclick={resetFilters}
           class="px-3 py-1.5 border border-indigo-500/30 hover:border-indigo-550/40 bg-indigo-550/10 hover:bg-indigo-550/20 text-indigo-400 text-xs font-semibold rounded-lg transition"
@@ -356,7 +685,7 @@
   {/if}
 
   <!-- Content Area -->
-  <div class="flex-1 overflow-y-auto p-6">
+  <div class="flex-1 overflow-hidden relative">
     {#if baseList.length === 0}
       <div class="h-[75%] flex flex-col items-center justify-center text-center">
         <div class="w-12 h-12 rounded-full bg-slate-950/40 border border-slate-900 flex items-center justify-center text-slate-500 mb-4">
@@ -367,15 +696,15 @@
         <h3 class="text-base font-semibold text-slate-200">No Merge Requests</h3>
         <p class="text-slate-500 text-sm mt-1 max-w-[280px]">No open merge requests found matching this filter.</p>
       </div>
-    {:else if filteredMRs.length === 0}
+    {:else if sortedFilteredMRs.length === 0 && viewMode === "list"}
       <!-- Empty Filter State -->
       <div class="h-[70%] flex flex-col items-center justify-center text-center">
-        <div class="w-12 h-12 rounded-full bg-slate-950/40 border border-slate-900 flex items-center justify-center text-slate-500 mb-4">
+        <div class="w-12 h-12 rounded-full bg-slate-955/40 border border-slate-900 flex items-center justify-center text-slate-500 mb-4">
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
           </svg>
         </div>
-        <h3 class="text-base font-semibold text-slate-350">No Results Found</h3>
+        <h3 class="text-base font-semibold text-slate-355">No Results Found</h3>
         <p class="text-slate-500 text-sm mt-1 max-w-[280px]">No merge requests match your filter criteria. Try resetting or adjusting your search.</p>
         <button
           onclick={resetFilters}
@@ -384,19 +713,29 @@
           Reset Filters
         </button>
       </div>
-    {:else}
-      <div class="space-y-3">
-        {#each filteredMRs as mr (mr.id)}
+    {:else if viewMode === "list"}
+      <div class="h-full overflow-y-auto p-6 space-y-3">
+        {#each sortedFilteredMRs as mr (mr.id)}
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
             oncontextmenu={(e) => handleContextMenu(e, mr.web_url)}
-            class="group p-4 bg-slate-950/20 border-t border-r border-b border-l-2 border-y-slate-900/40 border-r-slate-900/40 {getBorderLeftAccent(mr)} hover:bg-slate-900/25 hover:border-y-slate-800/60 hover:border-r-slate-800/60 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl transition-all duration-200 flex items-start justify-between relative"
+            onclick={() => onSelectMR(mr)}
+            onmouseenter={() => handleMouseEnter(mr.id)}
+            onmouseleave={() => handleMouseLeave(mr.id)}
+            class={[
+              "group p-4 bg-slate-950/20 border-t border-r border-b border-l-2 border-y-slate-900/40 border-r-slate-900/40 hover:bg-slate-900/25 hover:border-y-slate-800/60 hover:border-r-slate-800/60 hover:shadow-md hover:shadow-indigo-500/5 rounded-xl flex items-start justify-between relative cursor-pointer mr-transitionable",
+              getBorderLeftAccent(mr),
+              mr.state === "merged" && mr._glowActive && "mr-glow-merged",
+              mr.state === "closed" && mr._glowActive && "mr-glow-closed",
+              mr._isFadingOut && "mr-fade-out"
+            ]}
           >
             <div class="min-w-0 flex-1 pr-4">
               <!-- Title, ID, State & Draft Indicator -->
               <div class="flex items-center space-x-2.5 flex-wrap gap-y-1.5">
                 {#if mr.work_in_progress || mr.draft}
-                  <span class="px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider bg-slate-850 text-slate-400 border border-slate-700/60 rounded">
+                  <span class="px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider bg-slate-855 text-slate-400 border border-slate-700/65 rounded">
                     DRAFT
                   </span>
                 {/if}
@@ -411,10 +750,8 @@
                   </span>
                 {/if}
 
-                <!-- svelte-ignore a11y_click_events_have_key_events -->
                 <span
-                  onclick={() => Browser.OpenURL(mr.web_url)}
-                  class="text-sm font-semibold text-slate-100 hover:text-indigo-400 transition cursor-pointer"
+                  class="text-sm font-semibold text-slate-100 group-hover:text-indigo-400 transition"
                   title={mr.title}
                 >
                   {mr.title}
@@ -445,16 +782,16 @@
 
               <!-- Branches Info (GitFlow representation) -->
               <div class="flex items-center space-x-2 text-xs text-slate-400 mt-2.5 font-mono">
-                <span class="bg-slate-950/70 border border-slate-900 px-1.5 py-0.5 rounded text-[11px] text-slate-350">
+                <span class="bg-slate-950/70 border border-slate-900 px-1.5 py-0.5 rounded text-[11px] text-slate-355">
                   {mr.source_branch}
                 </span>
                 <span class="text-slate-650 flex items-center">
-                  <!-- Branch Merge Icon / ⎇ -->
+                  <!-- Branch Merge Icon -->
                   <svg class="w-3.5 h-3.5 mx-0.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7a3 3 0 100-6 3 3 0 000 6zm0 10a3 3 0 100-6 3 3 0 000 6zm0-10v4m0 0l4-4m-4 4L4 7m4 4h4" />
                   </svg>
                 </span>
-                <span class="bg-slate-950/70 border border-slate-900 px-1.5 py-0.5 rounded text-[11px] text-slate-350">
+                <span class="bg-slate-950/70 border border-slate-900 px-1.5 py-0.5 rounded text-[11px] text-slate-355">
                   {mr.target_branch}
                 </span>
               </div>
@@ -496,7 +833,6 @@
                   class="px-2 py-1 border text-[11px] font-bold uppercase tracking-wider rounded-lg flex items-center space-x-1.5 cursor-pointer transition select-none {getPipelineStatusClasses(mr.head_pipeline?.status || '')}"
                   title="Head Pipeline: {mr.head_pipeline?.status || ''} (Click to open, right-click to copy)"
                 >
-                  <!-- Circular status indicator check / spinner / cross -->
                   {#if mr.head_pipeline.status === "success"}
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -524,7 +860,7 @@
                       <img
                         src={assignee.avatar_url}
                         alt="Assignee: {assignee.name}"
-                        class="w-6 h-6 rounded-full border border-slate-950 object-cover ring-1 ring-slate-800/80"
+                        class="w-6 h-6 rounded-full border border-slate-955 object-cover ring-1 ring-slate-800/80"
                         title="Assignee: {assignee.name}"
                       />
                     {/if}
@@ -534,7 +870,7 @@
                       <img
                         src={reviewer.avatar_url}
                         alt="Reviewer: {reviewer.name}"
-                        class="w-6 h-6 rounded-full border border-slate-950 object-cover ring-1 ring-slate-800/50 filter brightness-90"
+                        class="w-6 h-6 rounded-full border border-slate-955 object-cover ring-1 ring-slate-800/50 filter brightness-90"
                         title="Reviewer: {reviewer.name}"
                       />
                     {/if}
@@ -542,7 +878,7 @@
                 </div>
               {/if}
 
-              <!-- Merge & Close action controls (if MR is opened) -->
+              <!-- Merge & Close action controls -->
               {#if mr.state === "opened"}
                 <div class="flex items-center space-x-1.5 pl-2">
                   <button
@@ -564,7 +900,7 @@
                     class="px-2.5 py-1.5 bg-rose-600/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 hover:border-rose-500 font-semibold text-xs rounded-lg transition disabled:opacity-40 flex items-center space-x-1 shrink-0"
                   >
                     {#if processingMRs[mr.id] === "closing"}
-                      <div class="w-3 h-3 border border-rose-400 border-t-transparent rounded-full animate-spin"></div>
+                      <div class="w-3 h-3 border border-rose-450 border-t-transparent rounded-full animate-spin"></div>
                       <span>Closing...</span>
                     {:else}
                       <span>Close</span>
@@ -586,6 +922,190 @@
             </div>
           </div>
         {/each}
+      </div>
+    {:else}
+      <!-- Kanban Board View -->
+      <div class="h-full w-full overflow-x-auto p-6 flex space-x-4 select-none">
+        
+        <!-- Column 1: Drafts -->
+        <div class="flex-1 min-w-[280px] max-w-[350px] bg-slate-900/15 border border-slate-900/80 rounded-2xl p-3.5 flex flex-col h-full">
+          <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-900/50 shrink-0">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Drafts</h3>
+            <span class="px-1.5 py-0.5 text-[10px] font-bold bg-slate-800 text-slate-400 rounded-full">{draftMRs.length}</span>
+          </div>
+          <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+            {#each draftMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                draggable="true"
+                ondragstart={(e) => handleDragStart(e, mr)}
+                ondragend={handleDragEnd}
+                onclick={() => onSelectMR(mr)}
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-pointer transition"
+                class:opacity-40={draggedMR?.id === mr.id}
+              >
+                <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
+                <h4 class="text-sm font-semibold text-slate-100 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
+                <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
+                  <span>#{mr.iid}</span>
+                  <span>{formatRelativeTime(mr.updated_at)}</span>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Column 2: In Progress -->
+        <div class="flex-1 min-w-[280px] max-w-[350px] bg-slate-900/15 border border-slate-900/80 rounded-2xl p-3.5 flex flex-col h-full">
+          <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-900/50 shrink-0">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-blue-400">In Progress</h3>
+            <span class="px-1.5 py-0.5 text-[10px] font-bold bg-blue-500/10 text-blue-400 rounded-full">{inProgressMRs.length}</span>
+          </div>
+          <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+            {#each inProgressMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                draggable="true"
+                ondragstart={(e) => handleDragStart(e, mr)}
+                ondragend={handleDragEnd}
+                onclick={() => onSelectMR(mr)}
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-pointer transition"
+                class:opacity-40={draggedMR?.id === mr.id}
+              >
+                <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
+                <h4 class="text-sm font-semibold text-slate-100 group-hover:text-indigo-455 transition mt-1 line-clamp-2">{mr.title}</h4>
+                <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
+                  <span>#{mr.iid}</span>
+                  <span>{formatRelativeTime(mr.updated_at)}</span>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Column 3: Reviewing -->
+        <div class="flex-1 min-w-[280px] max-w-[350px] bg-slate-900/15 border border-slate-900/80 rounded-2xl p-3.5 flex flex-col h-full">
+          <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-900/50 shrink-0">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-purple-400">Reviewing</h3>
+            <span class="px-1.5 py-0.5 text-[10px] font-bold bg-purple-500/10 text-purple-400 rounded-full">{reviewingMRs.length}</span>
+          </div>
+          <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+            {#each reviewingMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                draggable="true"
+                ondragstart={(e) => handleDragStart(e, mr)}
+                ondragend={handleDragEnd}
+                onclick={() => onSelectMR(mr)}
+                class="group p-3 bg-slate-950/35 hover:bg-slate-950/60 border border-slate-900/60 hover:border-slate-800/70 rounded-xl cursor-pointer transition"
+                class:opacity-40={draggedMR?.id === mr.id}
+              >
+                <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
+                <h4 class="text-sm font-semibold text-slate-100 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
+                <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
+                  <span>#{mr.iid}</span>
+                  <span>{formatRelativeTime(mr.updated_at)}</span>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Column 4: Merged Drop Zone / Recently Merged -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          ondragover={handleDragOverMerge}
+          ondragleave={handleDragLeaveMerge}
+          ondrop={handleDropMerge}
+          class="flex-1 min-w-[280px] max-w-[350px] rounded-2xl p-3.5 flex flex-col h-full border-2 transition-all duration-200 {isDraggingOverMerge ? 'bg-emerald-950/10 border-emerald-500/80' : draggedMR ? 'bg-slate-900/10 border-dashed border-emerald-500/30' : 'bg-slate-900/15 border-slate-900/80'}"
+        >
+          <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-900/50 shrink-0">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-400">Merged</h3>
+            <span class="px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500/10 text-emerald-400 rounded-full">{mergedMRs.length}</span>
+          </div>
+          <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+            {#if draggedMR && mergedMRs.length === 0}
+              <div class="h-24 flex flex-col items-center justify-center text-center text-slate-550 border border-dashed border-emerald-500/20 rounded-xl bg-emerald-500/[0.02] p-4 pointer-events-none">
+                <svg class="w-5 h-5 text-emerald-500 animate-pulse mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="text-[10px] font-bold">Drop here to Merge MR</div>
+              </div>
+            {/if}
+
+            {#each mergedMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                onclick={() => onSelectMR(mr)}
+                onmouseenter={() => handleMouseEnter(mr.id)}
+                onmouseleave={() => handleMouseLeave(mr.id)}
+                class={[
+                  "group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 cursor-pointer mr-transitionable",
+                  mr.state === "merged" && mr._glowActive && "mr-glow-merged-kanban",
+                  mr._isFadingOut && "mr-fade-out"
+                ]}
+              >
+                <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
+                <h4 class="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
+                <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
+                  <span>#{mr.iid}</span>
+                  <span>merged {formatRelativeTime(mr.merged_at || mr.updated_at)}</span>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+
+        <!-- Column 5: Closed Drop Zone / Recently Closed -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          ondragover={handleDragOverClose}
+          ondragleave={handleDragLeaveClose}
+          ondrop={handleDropClose}
+          class="flex-1 min-w-[280px] max-w-[350px] rounded-2xl p-3.5 flex flex-col h-full border-2 transition-all duration-200 {isDraggingOverClose ? 'bg-rose-955/10 border-rose-500/80' : draggedMR ? 'bg-slate-900/10 border-dashed border-rose-500/30' : 'bg-slate-900/15 border-slate-900/80'}"
+        >
+          <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-900/50 shrink-0">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-rose-450">Closed</h3>
+            <span class="px-1.5 py-0.5 text-[10px] font-bold bg-rose-500/10 text-rose-400 rounded-full">{closedMRs.length}</span>
+          </div>
+          <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+            {#if draggedMR && closedMRs.length === 0}
+              <div class="h-24 flex flex-col items-center justify-center text-center text-slate-555 border border-dashed border-rose-500/20 rounded-xl bg-rose-500/[0.02] p-4 pointer-events-none">
+                <svg class="w-5 h-5 text-rose-550 animate-pulse mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div class="text-[10px] font-bold">Drop here to Close MR</div>
+              </div>
+            {/if}
+
+            {#each closedMRs as mr (mr.id)}
+              <!-- svelte-ignore a11y_click_events_have_key_events -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                onclick={() => onSelectMR(mr)}
+                onmouseenter={() => handleMouseEnter(mr.id)}
+                onmouseleave={() => handleMouseLeave(mr.id)}
+                class={[
+                  "group p-3 bg-slate-955/15 border border-slate-900/40 rounded-xl opacity-60 hover:opacity-95 cursor-pointer mr-transitionable",
+                  mr.state === "closed" && mr._glowActive && "mr-glow-closed-kanban",
+                  mr._isFadingOut && "mr-fade-out"
+                ]}
+              >
+                <div class="text-xs font-semibold text-indigo-400 truncate">{getProjectPath(mr.web_url)}</div>
+                <h4 class="text-sm font-semibold text-slate-200 group-hover:text-indigo-400 transition mt-1 line-clamp-2">{mr.title}</h4>
+                <div class="flex items-center justify-between mt-3 text-[10px] text-slate-500">
+                  <span>#{mr.iid}</span>
+                  <span>closed {formatRelativeTime(mr.closed_at || mr.updated_at)}</span>
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+
       </div>
     {/if}
   </div>
@@ -614,3 +1134,75 @@
     </button>
   </div>
 {/if}
+
+<style>
+  @keyframes merged-glow {
+    0%, 100% {
+      box-shadow: 0 0 12px 2px rgba(99, 102, 241, 0.4);
+      border-color: rgba(99, 102, 241, 0.6);
+    }
+    50% {
+      box-shadow: 0 0 20px 4px rgba(99, 102, 241, 0.6);
+      border-color: rgba(99, 102, 241, 0.9);
+    }
+  }
+
+  @keyframes closed-glow {
+    0%, 100% {
+      box-shadow: 0 0 12px 2px rgba(244, 63, 94, 0.4);
+      border-color: rgba(244, 63, 94, 0.6);
+    }
+    50% {
+      box-shadow: 0 0 20px 4px rgba(244, 63, 94, 0.6);
+      border-color: rgba(244, 63, 94, 0.9);
+    }
+  }
+
+  .mr-glow-merged {
+    animation: merged-glow 2s infinite ease-in-out;
+    background-color: rgba(99, 102, 241, 0.05) !important;
+  }
+
+  .mr-glow-closed {
+    animation: closed-glow 2s infinite ease-in-out;
+    background-color: rgba(244, 63, 94, 0.05) !important;
+  }
+
+  .mr-glow-merged-kanban {
+    animation: merged-glow 2s infinite ease-in-out;
+    background-color: rgba(99, 102, 241, 0.1) !important;
+    opacity: 1 !important;
+  }
+
+  .mr-glow-closed-kanban {
+    animation: closed-glow 2s infinite ease-in-out;
+    background-color: rgba(244, 63, 94, 0.1) !important;
+    opacity: 1 !important;
+  }
+
+  .mr-glow-merged:hover,
+  .mr-glow-closed:hover,
+  .mr-glow-merged-kanban:hover,
+  .mr-glow-closed-kanban:hover {
+    animation-play-state: paused;
+  }
+
+  .mr-transitionable {
+    max-height: 500px;
+    transition: all 400ms cubic-bezier(0.4, 0, 0.2, 1), background-color 200ms, border-color 200ms;
+  }
+
+  .mr-fade-out {
+    opacity: 0 !important;
+    max-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    border-top-width: 0 !important;
+    border-bottom-width: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    transition: all 400ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+</style>

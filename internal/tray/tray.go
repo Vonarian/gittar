@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"runtime"
+	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -69,12 +70,20 @@ func (ts *TrayService) UpdateTray(passing, failing, running int) {
 }
 
 // Notify triggers a native operating system notification.
-func (ts *TrayService) Notify(title, body string) {
+func (ts *TrayService) Notify(title, body string) error {
 	if ts.notifier == nil {
-		return
+		fmt.Println("[Go Backend] Notify failed: ts.notifier is nil")
+		return fmt.Errorf("notifier not initialized")
 	}
-	_ = ts.notifier.SendNotification(notifications.NotificationOptions{
+	err := ts.notifier.SendNotification(notifications.NotificationOptions{
+		ID:    fmt.Sprintf("gittar-%d", time.Now().UnixNano()),
 		Title: title,
 		Body:  body,
 	})
+	if err != nil {
+		fmt.Printf("[Go Backend] SendNotification error: %v\n", err)
+		return err
+	}
+	fmt.Printf("[Go Backend] SendNotification succeeded for title: %q, body: %q\n", title, body)
+	return nil
 }

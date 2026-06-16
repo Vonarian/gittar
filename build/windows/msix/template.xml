@@ -10,15 +10,15 @@
     <Installer
         Path="gittar"
         Arguments=""
-        InstallLocation="C:\Program Files\My Company\My Product">
+        InstallLocation="C:\Program Files\Gittar\Gittar">
     </Installer>
     <PackageInformation
-        PackageName="My Product"
-        PackageDisplayName="My Product"
-        PublisherName="CN=My Company"
-        PublisherDisplayName="My Company"
+        PackageName="Gittar"
+        PackageDisplayName="Gittar"
+        PublisherName="CN=Gittar"
+        PublisherDisplayName="Gittar"
         Version="0.1.0.0"
-        PackageDescription="A gittar application">
+        PackageDescription="GitLab Enterprise Control Panel">
         <Capabilities>
             <Capability Name="runFullTrust" />
             
@@ -26,8 +26,8 @@
         <Applications>
             <Application
                 Id="com.example.gittar"
-                Description="A gittar application"
-                DisplayName="My Product"
+                Description="GitLab Enterprise Control Panel"
+                DisplayName="Gittar"
                 ExecutableName="gittar"
                 EntryPoint="Windows.FullTrustApplication">
                 
@@ -41,9 +41,9 @@
         </Dependencies>
         <Properties>
             <Framework>false</Framework>
-            <DisplayName>My Product</DisplayName>
-            <PublisherDisplayName>My Company</PublisherDisplayName>
-            <Description>A gittar application</Description>
+            <DisplayName>Gittar</DisplayName>
+            <PublisherDisplayName>Gittar</PublisherDisplayName>
+            <Description>GitLab Enterprise Control Panel</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>

@@ -5,11 +5,11 @@
 		<key>CFBundleDisplayName</key>
 		<string>Gittar</string>
 		<key>CFBundleExecutable</key>
-		<string>gittar</string>
+		<string/>
 		<key>CFBundleGetInfoString</key>
-		<string>Gittar Desktop Control Panel</string>
+		<string>This is a comment</string>
 		<key>CFBundleIdentifier</key>
-		<string>com.vonarian.gittar</string>
+		<string/>
 		<key>CFBundleName</key>
 		<string>Gittar</string>
 		<key>CFBundlePackageType</key>

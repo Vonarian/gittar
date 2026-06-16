@@ -62,6 +62,23 @@
   animation: pulse-glow 2s infinite ease-in-out;
 }
 
+@keyframes badge-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+    background-color: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 8px 1.5px rgba(245, 158, 11, 0.25);
+    background-color: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.45);
+  }
+}
+
+.animate-badge-pulse {
+  animation: badge-pulse 2s infinite ease-in-out;
+}
+
 @keyframes spin-slow {
   from {
     transform: rotate(0deg);
