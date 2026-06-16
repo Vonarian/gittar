@@ -120,10 +120,10 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Install build deps (CGO gcc)
+      - name: Install build deps (CGO gcc + GTK/webkit)
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc libc6-dev
+          sudo apt-get install -y gcc libc6-dev libgtk-4-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
 
       - name: Build frontend
         working-directory: frontend
@@ -131,26 +131,19 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build Linux binary (amd64)
+      - name: Build Linux binaries (amd64 + arm64)
         env:
-          GOOS: linux
-          GOARCH: amd64
           CGO_ENABLED: '1'
-        run: go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-amd64
+        run: |
+          GOOS=linux GOARCH=amd64 go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-amd64
+          GOOS=linux GOARCH=arm64 go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-arm64
 
-      - name: Upload Linux artifact
+      - name: Upload Linux amd64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: Gittar-linux-amd64
           path: bin/Gittar-linux-amd64
           retention-days: 5
-
-      - name: Build Linux binary (arm64)
-        env:
-          GOOS: linux
-          GOARCH: arm64
-          CGO_ENABLED: '1'
-        run: go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-arm64
 
       - name: Upload Linux arm64 artifact
         uses: actions/upload-artifact@v4
