@@ -129,9 +129,9 @@ jobs:
 
       - name: Fix webkit2gtk include path
         run: |
-          INC_DIR=$(ls -d /usr/include/webkit* 2>/dev/null | head -1)
-          if [ -n "$INC_DIR" ]; then
-            sudo ln -sf "$INC_DIR/webkit" /usr/include/webkit
+          INC=$(ls -d /usr/include/webkit2gtk-4* 2>/dev/null | head -1)
+          if [ -n "$INC" ] && [ ! -d /usr/include/webkit ]; then
+            sudo ln -sf "$INC" /usr/include/webkit
           fi
 
       - name: Fix webkitgtk pkg-config symlink
