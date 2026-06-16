@@ -129,9 +129,14 @@ jobs:
 
       - name: Fix webkit2gtk include path
         run: |
-          INC=$(ls -d /usr/include/webkit2gtk-4* 2>/dev/null | head -1)
-          if [ -n "$INC" ] && [ ! -d /usr/include/webkit ]; then
-            sudo ln -sf "$INC" /usr/include/webkit
+          # Create /usr/include/webkit/webkit.h -> /usr/include/webkit2gtk-4.1/webkit2gtk-4.1/webkit.h
+          INC=$(find /usr/include -name 'webkit.h' 2>/dev/null | head -1)
+          if [ -n "$INC" ]; then
+            DIR=$(dirname "$INC")
+            PARENT=$(dirname "$DIR")
+            sudo ln -sf "$PARENT/webkit" /usr/include/webkit 2>/dev/null || true
+            sudo mkdir -p /usr/include/webkit/webkit 2>/dev/null || true
+            sudo ln -sf "$INC" /usr/include/webkit/webkit/webkit.h 2>/dev/null || true
           fi
 
       - name: Fix webkitgtk pkg-config symlink
