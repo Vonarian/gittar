@@ -334,13 +334,13 @@
       {#if currentTab === "todos"}
         <TodosPanel 
           todos={telemetry?.todos || []} 
-          onRefresh={() => fetchTelemetryData(true)}
+          onRefresh={() => fetchTelemetryData(false)}
         />
       {:else if currentTab === "pipelines"}
         <PipelinesPanel
           pipelines={telemetry?.pipelines || []}
           onSelectJobLog={handleSelectJobLog}
-          onRefresh={() => fetchTelemetryData(true)}
+          onRefresh={() => fetchTelemetryData(false)}
           {ignoreFailedPipelines}
           onToggleIgnoreFailed={toggleIgnoreFailedPipelines}
         />
@@ -348,14 +348,14 @@
         <MRsPanel
           mergeRequests={telemetry?.mergeRequests || []}
           {username}
-          onRefresh={() => fetchTelemetryData(true)}
+          onRefresh={() => fetchTelemetryData(false)}
           onSelectMR={handleSelectMR}
         />
       {:else if currentTab === "issues"}
         <IssuesPanel
           issues={telemetry?.issues || []}
           {username}
-          onRefresh={() => fetchTelemetryData(true)}
+          onRefresh={() => fetchTelemetryData(false)}
         />
       {:else if currentTab === "setup"}
         <div class="h-full overflow-y-auto p-6">
@@ -380,6 +380,6 @@
     mr={selectedMR}
     {username}
     onClose={() => (isMRInspectorOpen = false)}
-    onRefreshList={() => fetchTelemetryData(true)}
+    onRefreshList={() => fetchTelemetryData(false)}
   />
 </div>
