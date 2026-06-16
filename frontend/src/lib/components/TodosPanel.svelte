@@ -150,16 +150,21 @@
   async function markAsDone(todoId: number) {
     if (isMarkingDone[todoId]) return;
     isMarkingDone[todoId] = true;
+
+    // Optimistic UI update: move to recentlyDone immediately for instant visual feedback
+    const found = todos.find((t) => t.id === todoId);
+    if (found) {
+      recentlyDoneTodos = [found, ...recentlyDoneTodos];
+    }
+
     try {
-      const found = todos.find((t) => t.id === todoId);
       await MarkTodoAsDone(todoId);
-      if (found) {
-        recentlyDoneTodos = [found, ...recentlyDoneTodos];
-      }
-      if (onRefresh) {
-        onRefresh();
-      }
+      // NOTE: We intentionally do NOT call onRefresh here.
+      // The optimistic UI update already removes the item from view.
+      // The background poll will naturally refresh the todos list on its next cycle.
     } catch (e: any) {
+      // Roll back optimistic update on failure
+      recentlyDoneTodos = recentlyDoneTodos.filter((rd) => rd.id !== todoId);
       console.error("Failed to mark todo as done:", e);
       alert("Failed to mark todo as done: " + e.message);
     } finally {
