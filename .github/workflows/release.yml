@@ -127,17 +127,22 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-4.0-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-dev 2>/dev/null || true
           echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> "$GITHUB_ENV"
 
-      - name: Fix webkit2gtk include path
+      - name: Debug webkit2gtk installation
         run: |
-          # Create /usr/include/webkit/webkit.h -> /usr/include/webkit2gtk-4.1/webkit2gtk-4.1/webkit.h
-          INC=$(find /usr/include -name 'webkit.h' 2>/dev/null | head -1)
-          if [ -n "$INC" ]; then
-            DIR=$(dirname "$INC")
-            PARENT=$(dirname "$DIR")
-            sudo ln -sf "$PARENT/webkit" /usr/include/webkit 2>/dev/null || true
-            sudo mkdir -p /usr/include/webkit/webkit 2>/dev/null || true
-            sudo ln -sf "$INC" /usr/include/webkit/webkit/webkit.h 2>/dev/null || true
-          fi
+          echo "=== pkg-config cflags ==="
+          pkg-config --cflags webkit2gtk-4.1 2>/dev/null || pkg-config --cflags webkit2gtk-4.0 2>/dev/null || echo "no pkg-config found"
+          echo "=== dpkg -L libwebkit2gtk-4.1-dev ==="
+          dpkg -L libwebkit2gtk-4.1-dev 2>/dev/null | grep '\.h' | head -20
+          echo "=== dpkg -L libwebkit2gtk-4.0-dev ==="
+          dpkg -L libwebkit2gtk-4.0-dev 2>/dev/null | grep '\.h' | head -20
+
+      - name: Fix webkitgtk include path
+        run: |
+          sudo find /usr/include -name '*webkit*' 2>/dev/null | head -10
+          sudo mkdir -p /usr/include/webkit/webkit
+          sudo ln -sf /usr/include/webkit2gtk-4.1/webkit2gtk-4.1/webkit.h /usr/include/webkit/webkit/webkit.h 2>/dev/null || true
+          sudo ln -sf /usr/include/webkit2gtk-4.0/webkit2gtk-4.0/webkit.h /usr/include/webkit/webkit/webkit.h 2>/dev/null || true
+          ls -la /usr/include/webkit/webkit/ 2>/dev/null
 
       - name: Fix webkitgtk pkg-config symlink
         run: |
