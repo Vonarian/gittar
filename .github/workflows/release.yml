@@ -125,11 +125,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc libc6-dev libgtk-3-dev libgtk-4-dev libsoup-3.0-dev
           sudo apt-get install -y libwebkit2gtk-4.0-dev || sudo apt-get install -y libwebkit2gtk-4.1-dev || true
-          mkdir -p /usr/lib/x86_64-linux-gnu/pkgconfig
-          PC_FILE=$(find /usr/lib -name 'webkit2gtk*.pc' 2>/dev/null | head -1)
-          if [ -n "$PC_FILE" ]; then
-            ln -sf "$(basename "$PC_FILE")" "/usr/lib/x86_64-linux-gnu/pkgconfig/webkitgtk-6.0.pc"
-          fi
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/$(find /usr/lib/x86_64-linux-gnu/pkgconfig/ -name 'webkit2gtk*.pc' -exec basename {} \\; | head -1) /usr/lib/x86_64-linux-gnu/pkgconfig/webkitgtk-6.0.pc 2>/dev/null || true
           echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> "$GITHUB_ENV"
 
       - name: Build frontend
