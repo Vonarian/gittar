@@ -1,0 +1,186 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-darwin:
+    name: macOS (Universal)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build macOS binary
+        env:
+          CGO_ENABLED: '1'
+          GOOS: darwin
+        run: |
+          # Build amd64
+          GOARCH=amd64 go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-amd64
+          # Build arm64
+          GOARCH=arm64 go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-arm64
+          # Fat binary
+          lipo -create -output bin/Gittar bin/Gittar-amd64 bin/Gittar-arm64
+
+      - name: Create .app bundle
+        run: |
+          mkdir -p bin/Gittar.app/Contents/MacOS
+          mkdir -p bin/Gittar.app/Contents/Resources
+          cp bin/Gittar bin/Gittar.app/Contents/MacOS/Gittar
+          # Copy frontend dist into the bundle
+          mkdir -p bin/Gittar.app/Contents/Resources/frontend/dist
+          cp -r frontend/dist/* bin/Gittar.app/Contents/Resources/frontend/dist/
+          # Code-sign ad-hoc
+          codesign --force --deep --sign - bin/Gittar.app
+
+      - name: Sign macOS app
+        if: secrets.MACOS_SIGNING_CERT
+        env:
+          MACOS_SIGN_CERT: ${{ secrets.MACOS_SIGN_CERT }}
+        run: |
+          echo "$MACOS_SIGN_CERT" > /tmp/signing.p12
+          security cms -D -i /tmp/signing.p12 -o /tmp/signing.pem 2>/dev/null || true
+          security cms -D -i /tmp/signing.p12 -o /tmp/signing.pem 2>/dev/null || true
+          security unlock-keychain -s /tmp/signing.p12 2>/dev/null || true
+          codesign --force --sign "$MACOS_SIGN_CERT" bin/Gittar.app
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gittar-darwin-universal
+          path: bin/Gittar.app
+          retention-days: 5
+
+  build-windows:
+    name: Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Windows binary
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: '0'
+        run: |
+          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin/Gittar.exe
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gittar-windows-amd64
+          path: bin/Gittar.exe
+          retention-days: 5
+
+  build-linux:
+    name: Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install build deps (CGO gcc)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libc6-dev
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Linux binary (amd64)
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: '1'
+        run: |
+          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-amd64
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gittar-linux-amd64
+          path: bin/Gittar-linux-amd64
+          retention-days: 5
+
+      - name: Build Linux binary (arm64)
+        env:
+          GOOS: linux
+          GOARCH: arm64
+          CGO_ENABLED: '1'
+        run: |
+          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-arm64
+
+      - name: Upload Linux arm64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gittar-linux-arm64
+          path: bin/Gittar-linux-arm64
+          retention-days: 5
+
+  ci-pass:
+    name: Release Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [build-darwin, build-windows, build-linux]
+    if: ${{ always() && !cancelled() }}
+    steps:
+      - name: Check results
+        run: echo "Release builds passed."

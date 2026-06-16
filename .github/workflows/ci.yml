@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go-check:
+    name: Go lint & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: go.sum
+
+      - name: Detect changed backend files
+        id: changed-backend
+        uses: tj-actions/changed-files@v20
+        with:
+          files: |
+            internal/**/*.go
+            go.mod
+            go.sum
+            main.go
+
+      - name: Run golangci-lint
+        if: steps.changed-backend.outputs.changed == 'true'
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.2.2
+          args: --config=.golangci.yml
+          only-new-issues: true
+
+      - name: Run Go tests
+        if: steps.changed-backend.outputs.changed == 'true'
+        run: go test -v -race -count=1 ./internal/...
+
+  frontend-check:
+    name: Frontend typecheck & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Detect changed frontend files
+        id: changed-frontend
+        uses: tj-actions/changed-files@v20
+        with:
+          files: |
+            frontend/**/*
+
+      - name: Install deps
+        if: steps.changed-frontend.outputs.changed == 'true'
+        run: npm ci
+        working-directory: frontend
+
+      - name: Svelte typecheck
+        if: steps.changed-frontend.outputs.changed == 'true'
+        run: npm run check
+
+      - name: Frontend build
+        if: steps.changed-frontend.outputs.changed == 'true'
+        run: npm run build
+
+  ci-pass:
+    name: CI Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [go-check, frontend-check]
+    if: ${{ always() && !cancelled() }}
+    steps:
+      - name: Check results
+        run: |
+          echo "CI passed."
