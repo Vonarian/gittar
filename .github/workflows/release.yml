@@ -40,11 +40,8 @@ jobs:
           CGO_ENABLED: '1'
           GOOS: darwin
         run: |
-          # Build amd64
           GOARCH=amd64 go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-amd64
-          # Build arm64
           GOARCH=arm64 go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-arm64
-          # Fat binary
           lipo -create -output bin/Gittar bin/Gittar-amd64 bin/Gittar-arm64
 
       - name: Create .app bundle
@@ -52,22 +49,9 @@ jobs:
           mkdir -p bin/Gittar.app/Contents/MacOS
           mkdir -p bin/Gittar.app/Contents/Resources
           cp bin/Gittar bin/Gittar.app/Contents/MacOS/Gittar
-          # Copy frontend dist into the bundle
           mkdir -p bin/Gittar.app/Contents/Resources/frontend/dist
           cp -r frontend/dist/* bin/Gittar.app/Contents/Resources/frontend/dist/
-          # Code-sign ad-hoc
           codesign --force --deep --sign - bin/Gittar.app
-
-      - name: Sign macOS app
-        if: secrets.MACOS_SIGNING_CERT
-        env:
-          MACOS_SIGN_CERT: ${{ secrets.MACOS_SIGN_CERT }}
-        run: |
-          echo "$MACOS_SIGN_CERT" > /tmp/signing.p12
-          security cms -D -i /tmp/signing.p12 -o /tmp/signing.pem 2>/dev/null || true
-          security cms -D -i /tmp/signing.p12 -o /tmp/signing.pem 2>/dev/null || true
-          security unlock-keychain -s /tmp/signing.p12 2>/dev/null || true
-          codesign --force --sign "$MACOS_SIGN_CERT" bin/Gittar.app
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
@@ -107,8 +91,7 @@ jobs:
           GOOS: windows
           GOARCH: amd64
           CGO_ENABLED: '0'
-        run: |
-          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin/Gittar.exe
+        run: go build -tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin/Gittar.exe
 
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
@@ -153,8 +136,7 @@ jobs:
           GOOS: linux
           GOARCH: amd64
           CGO_ENABLED: '1'
-        run: |
-          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-amd64
+        run: go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-amd64
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -168,8 +150,7 @@ jobs:
           GOOS: linux
           GOARCH: arm64
           CGO_ENABLED: '1'
-        run: |
-          go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-arm64
+        run: go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-arm64
 
       - name: Upload Linux arm64 artifact
         uses: actions/upload-artifact@v4
