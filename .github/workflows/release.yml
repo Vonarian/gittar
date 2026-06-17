@@ -29,8 +29,12 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Fix coreutils path conflict
-        run: echo 'PATH=$(echo "$PATH" | sed -E "s|/opt/homebrew/bin/||g")' >> "$GITHUB_ENV"
+      - name: Fix coreutils gtar conflict
+        run: |
+          coreutils_bin=$(which gtar 2>/dev/null | xargs dirname)
+          if [ "$coreutils_bin" != "" ] && [ "$coreutils_bin" != "/opt/homebrew/bin" ]; then
+            export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "$coreutils_bin" | tr '\n' ':' | sed 's/:$//')
+          fi
 
       - name: Build frontend
         working-directory: frontend
