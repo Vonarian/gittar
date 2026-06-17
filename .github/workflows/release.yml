@@ -127,10 +127,25 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-4.0-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-dev 2>/dev/null || true
           echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> "$GITHUB_ENV"
 
+      - name: Debug header paths
+        run: |
+          echo "=== pkg-config cflags ==="
+          pkg-config --cflags webkit2gtk-4.1 2>/dev/null || pkg-config --cflags webkit2gtk-4.0 2>/dev/null || echo "no pkg-config found"
+          echo "=== webkit .h files ==="
+          sudo find /usr/include -name 'webkit.h' 2>/dev/null
+          echo "=== webkit directories ==="
+          sudo find /usr/include -maxdepth 2 -type d -name '*webkit*' 2>/dev/null
+
       - name: Create webkit.h umbrella header
         run: |
-          sudo mkdir -p /usr/include/webkitgtk-4.0/webkit
-          sudo bash -c 'echo "#include <webkit2/webkit2.h>" > /usr/include/webkitgtk-4.0/webkit/webkit.h'
+          WEBKIT_INC=$(pkg-config --cflags webkit2gtk-4.1 2>/dev/null | grep -oP '\-I\K[^"]+' | head -1 || pkg-config --cflags webkit2gtk-4.0 2>/dev/null | grep -oP '\-I\K[^"]+' | head -1 || echo "/usr/include")
+          echo "Found include dir: $WEBKIT_INC"
+          WEBKIT_DIR=$(echo "$WEBKIT_INC" | sed 's|/usr/include/||')
+          echo "Creating /usr/include/$WEBKIT_DIR/webkit/webkit.h"
+          sudo mkdir -p "/usr/include/$WEBKIT_DIR/webkit"
+          sudo bash -c "echo \"#include <webkit2/webkit2.h>\" > /usr/include/$WEBKIT_DIR/webkit/webkit.h"
+          sudo ls -la "/usr/include/$WEBKIT_DIR/webkit/webkit.h"
+          sudo cat "/usr/include/$WEBKIT_DIR/webkit/webkit.h"
 
       - name: Fix webkitgtk pkg-config symlink
         run: |
