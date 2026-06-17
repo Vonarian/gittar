@@ -14,27 +14,20 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.24'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
-
-      - name: Fix coreutils gtar conflict
-        run: |
-          coreutils_bin=$(which gtar 2>/dev/null | xargs dirname)
-          if [ "$coreutils_bin" != "" ] && [ "$coreutils_bin" != "/opt/homebrew/bin" ]; then
-            export PATH=$(echo "$PATH" | tr ':' '\n' | grep -v "$coreutils_bin" | tr '\n' ':' | sed 's/:$//')
-          fi
 
       - name: Build frontend
         working-directory: frontend
@@ -61,7 +54,7 @@ jobs:
           codesign --force --deep --sign - bin/Gittar.app
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Gittar-darwin-universal
           path: bin/Gittar.app
@@ -72,16 +65,16 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.24'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: 'npm'
@@ -101,7 +94,7 @@ jobs:
         run: go build -tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin/Gittar.exe
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Gittar-windows-amd64
           path: bin/Gittar.exe
@@ -112,16 +105,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.24'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: 'npm'
@@ -146,7 +139,7 @@ jobs:
           GOOS=linux GOARCH=amd64 go build -tags "production,gtk3" -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-amd64
 
       - name: Upload Linux artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Gittar-linux-amd64
           path: bin/Gittar-linux-amd64
