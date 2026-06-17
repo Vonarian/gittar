@@ -102,7 +102,7 @@ jobs:
 
   build-linux:
     name: Linux
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -125,27 +125,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc libc6-dev libgtk-3-dev libgtk-4-dev libsoup-3.0-dev
           sudo apt-get install -y libwebkit2gtk-4.1-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-4.0-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-dev 2>/dev/null || true
-          echo "PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig" >> "$GITHUB_ENV"
 
-      - name: Create webkit.h umbrella header
+      - name: Set up webkitgtk-6.0 pkg-config and umbrella header
         run: |
-          WEBKIT_INC=$(pkg-config --cflags webkit2gtk-4.1 2>/dev/null | sed 's/-I\([^ ]*\).*/\1/' || echo "/usr/include")
-          if [ -z "$WEBKIT_INC" ]; then
-            WEBKIT_INC=$(pkg-config --cflags webkit2gtk-4.0 2>/dev/null | sed 's/-I\([^ ]*\).*/\1/' || echo "/usr/include")
-          fi
+          # Create webkitgtk-6.0.pc symlink so wails can find it
+          sudo ln -sf webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkitgtk-6.0.pc
+          # Get the include path from pkg-config
+          WEBKIT_INC=$(pkg-config --cflags webkitgtk-6.0 2>/dev/null | sed 's/-I\([^ ]*\).*/\1/')
           WEBKIT_DIR=$(basename "$WEBKIT_INC")
-          echo "WEBKIT_INC=$WEBKIT_INC WEBKIT_DIR=$WEBKIT_DIR"
+          echo "Creating header at /usr/include/$WEBKIT_DIR/webkit/webkit.h"
           sudo mkdir -p "/usr/include/$WEBKIT_DIR/webkit"
-          sudo bash -c "echo \"#include <webkit2/webkit2.h>\" > /usr/include/$WEBKIT_DIR/webkit/webkit.h"
-          echo "Created /usr/include/$WEBKIT_DIR/webkit/webkit.h"
+          sudo bash -c 'echo "#include <webkit2/webkit2.h>" > /usr/include/'$WEBKIT_DIR'/webkit/webkit.h'
           sudo ls -la "/usr/include/$WEBKIT_DIR/webkit/webkit.h"
-
-      - name: Fix webkitgtk pkg-config symlink
-        run: |
-          PC=$(ls /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4*.pc 2>/dev/null | head -1)
-          if [ -n "$PC" ]; then
-            sudo ln -sf "$(basename "$PC")" /usr/lib/x86_64-linux-gnu/pkgconfig/webkitgtk-6.0.pc
-          fi
 
       - name: Build frontend
         working-directory: frontend
