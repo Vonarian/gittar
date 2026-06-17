@@ -123,20 +123,8 @@ jobs:
       - name: Install build deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc libc6-dev libgtk-3-dev libgtk-4-dev libsoup-3.0-dev
-          sudo apt-get install -y libwebkit2gtk-4.1-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-4.0-dev 2>/dev/null || sudo apt-get install -y libwebkit2gtk-dev 2>/dev/null || true
-
-      - name: Set up webkitgtk-6.0 pkg-config and umbrella header
-        run: |
-          # Create webkitgtk-6.0.pc symlink so wails can find it
-          sudo ln -sf webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkitgtk-6.0.pc
-          # Get the include path from pkg-config
-          WEBKIT_INC=$(pkg-config --cflags webkitgtk-6.0 2>/dev/null | sed 's/-I\([^ ]*\).*/\1/')
-          WEBKIT_DIR=$(basename "$WEBKIT_INC")
-          echo "Creating header at /usr/include/$WEBKIT_DIR/webkit/webkit.h"
-          sudo mkdir -p "/usr/include/$WEBKIT_DIR/webkit"
-          sudo bash -c 'echo "#include <webkit2/webkit2.h>" > /usr/include/'$WEBKIT_DIR'/webkit/webkit.h'
-          sudo ls -la "/usr/include/$WEBKIT_DIR/webkit/webkit.h"
+          sudo apt-get install -y gcc libc6-dev
+          sudo apt-get install -y libgtk-3-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev
 
       - name: Build frontend
         working-directory: frontend
@@ -144,12 +132,12 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build Linux binaries
+      - name: Build Linux binaries (with gtk3 tag)
         env:
           CGO_ENABLED: '1'
         run: |
-          GOOS=linux GOARCH=amd64 go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-amd64
-          GOOS=linux GOARCH=arm64 go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-arm64
+          GOOS=linux GOARCH=amd64 go build -tags "production,gtk3" -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-amd64
+          GOOS=linux GOARCH=arm64 go build -tags "production,gtk3" -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-arm64
 
       - name: Upload Linux amd64 artifact
         uses: actions/upload-artifact@v4
