@@ -416,3 +416,60 @@ func TestMergeRequestDetailsAndActions(t *testing.T) {
 	}
 }
 
+func TestAICostPresetDefaults(t *testing.T) {
+	// Set up temporary config directory
+	tmpDir, err := os.MkdirTemp("", "gittar-config-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	oldHome := os.Getenv("HOME")
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+	}()
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("failed to set HOME: %v", err)
+	}
+
+	// 1. Check default load (without existing config file)
+	conf, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("failed to load default config: %v", err)
+	}
+	if conf.AICostPreset != "low" {
+		t.Errorf("expected default AICostPreset to be 'low', got '%s'", conf.AICostPreset)
+	}
+
+	// 2. Check loading an existing config file that lacks the field
+	conf.AICostPreset = ""
+	if err := config.SaveConfig(conf); err != nil {
+		t.Fatalf("failed to save config: %v", err)
+	}
+
+	confLoaded, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("failed to load saved config: %v", err)
+	}
+	if confLoaded.AICostPreset != "low" {
+		t.Errorf("expected loaded AICostPreset to fall back to 'low', got '%s'", confLoaded.AICostPreset)
+	}
+
+	// 3. Check saving a specific preset works
+	confLoaded.AICostPreset = "medium"
+	if err := config.SaveConfig(confLoaded); err != nil {
+		t.Fatalf("failed to save config with medium preset: %v", err)
+	}
+
+	confMedium, err := config.LoadConfig()
+	if err != nil {
+		t.Fatalf("failed to load saved medium config: %v", err)
+	}
+	if confMedium.AICostPreset != "medium" {
+		t.Errorf("expected AICostPreset to be 'medium', got '%s'", confMedium.AICostPreset)
+	}
+}
+
+
