@@ -45,6 +45,9 @@
   // Running polling timer reference
   let pollTimer: any = null;
   let isFetching = $state(false);
+  // Timestamp (ms) of the last completed fetch — used for the focus-refresh cooldown
+  let lastFetchedAt = 0;
+  const FOCUS_COOLDOWN_MS = 60_000; // 60 seconds
 
   // Derived counts for Sidebar badges
   const todosCount = $derived(telemetry?.todos?.length || 0);
@@ -111,6 +114,7 @@
     } finally {
       isLoading = false;
       isFetching = false;
+      lastFetchedAt = Date.now();
     }
   }
 
@@ -214,6 +218,11 @@
   });
 
   function handleWindowFocus() {
+    const msSinceLast = Date.now() - lastFetchedAt;
+    if (msSinceLast < FOCUS_COOLDOWN_MS) {
+      console.log(`[App] Window focused, skipping refresh (last fetch ${Math.round(msSinceLast / 1000)}s ago < ${FOCUS_COOLDOWN_MS / 1000}s cooldown)`);
+      return;
+    }
     console.log("[App] Window focused, refreshing telemetry...");
     fetchTelemetryData(false);
   }

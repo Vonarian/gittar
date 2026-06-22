@@ -176,8 +176,9 @@ func (c *Client) doRequestWithTTL(apiPath string, ttl time.Duration) ([]byte, bo
 
 
 // GetCurrentUser returns details of the currently authenticated user.
+// Cached for 1 hour — user identity is stable for the lifetime of a session.
 func (c *Client) GetCurrentUser() (*User, error) {
-	data, _, err := c.doRequest("user")
+	data, _, err := c.doRequestWithTTL("user", 1*time.Hour)
 	if err != nil {
 		return nil, err
 	}
@@ -332,46 +333,60 @@ func (c *Client) GetSingleMergeRequest(projectID int, mrIID int, updatedAt time.
 }
 
 // GetMergeRequests fetches merge requests authored by or assigned to the user.
+// The three scope-filtered list calls run concurrently to avoid serializing
+// rate-limit waits, saving ~2× 125ms per poll cycle.
 func (c *Client) GetMergeRequests(userID int) ([]MergeRequest, error) {
-	// Fetch assigned MRs
-	assignedData, _, err := c.doRequest("merge_requests?state=opened&scope=assigned_to_me&per_page=30")
-	if err != nil {
-		return nil, err
+	type listResult struct {
+		mrs []MergeRequest
+		err error
 	}
 
-	var assigned []MergeRequest
-	if err := json.Unmarshal(assignedData, &assigned); err != nil {
-		return nil, err
-	}
-
-	// Fetch authored MRs
-	authoredData, _, err := c.doRequest("merge_requests?state=opened&scope=created_by_me&per_page=30")
-	if err != nil {
-		return nil, err
-	}
-
-	var authored []MergeRequest
-	if err := json.Unmarshal(authoredData, &authored); err != nil {
-		return nil, err
-	}
-
-	// Fetch review requests MRs (where current user is a reviewer)
 	reviewerPath := fmt.Sprintf("merge_requests?state=opened&reviewer_id=%d&per_page=30", userID)
-	reviewerData, _, err := c.doRequest(reviewerPath)
-	var reviewerRequests []MergeRequest
-	if err == nil {
-		_ = json.Unmarshal(reviewerData, &reviewerRequests)
+
+	paths := []string{
+		"merge_requests?state=opened&scope=assigned_to_me&per_page=30",
+		"merge_requests?state=opened&scope=created_by_me&per_page=30",
+		reviewerPath,
+	}
+
+	results := make([]listResult, len(paths))
+	var listWg sync.WaitGroup
+	for i, path := range paths {
+		listWg.Add(1)
+		go func(idx int, p string) {
+			defer listWg.Done()
+			data, _, err := c.doRequest(p)
+			if err != nil {
+				results[idx] = listResult{err: err}
+				return
+			}
+			var mrs []MergeRequest
+			if err := json.Unmarshal(data, &mrs); err != nil {
+				results[idx] = listResult{err: err}
+				return
+			}
+			results[idx] = listResult{mrs: mrs}
+		}(i, path)
+	}
+	listWg.Wait()
+
+	// assigned and authored errors are fatal; reviewer error is soft (optional scope)
+	if results[0].err != nil {
+		return nil, results[0].err
+	}
+	if results[1].err != nil {
+		return nil, results[1].err
 	}
 
 	// Merge & Deduplicate
 	mrMap := make(map[int]MergeRequest)
-	for _, mr := range assigned {
+	for _, mr := range results[0].mrs {
 		mrMap[mr.ID] = mr
 	}
-	for _, mr := range authored {
+	for _, mr := range results[1].mrs {
 		mrMap[mr.ID] = mr
 	}
-	for _, mr := range reviewerRequests {
+	for _, mr := range results[2].mrs { // reviewer results[2].err is ignored (soft)
 		mrMap[mr.ID] = mr
 	}
 
