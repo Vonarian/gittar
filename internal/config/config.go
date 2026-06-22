@@ -39,6 +39,7 @@ type Config struct {
 	OpenAIAPIKey      string               `json:"openaiApiKey"`
 	OpenAIModel       string               `json:"openaiModel"`
 	OpenAIBaseURL     string               `json:"openaiBaseUrl"`
+	AICostPreset      string               `json:"aiCostPreset"`
 }
 
 // GetConfigDir returns the standard config directory for Gittar (~/.config/gittar).
@@ -70,6 +71,7 @@ func LoadConfig() (*Config, error) {
 			OpenRouterModel:   "google/gemini-2.5-flash",
 			OpenAIModel:       "gpt-4o-mini",
 			OpenAIBaseURL:     "http://localhost:11434/v1",
+			AICostPreset:      "low",
 			Notifications: NotificationSettings{
 				Enabled:         true,
 				PipelineSuccess: true,
@@ -111,6 +113,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if conf.OpenAIBaseURL == "" {
 		conf.OpenAIBaseURL = "http://localhost:11434/v1"
+	}
+	if conf.AICostPreset == "" {
+		conf.AICostPreset = "low"
 	}
 
 	return &conf, nil

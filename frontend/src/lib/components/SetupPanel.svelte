@@ -25,6 +25,7 @@
   let openaiApiKey = $state("");
   let openaiModel = $state("gpt-4o-mini");
   let openaiBaseUrl = $state("http://localhost:11434/v1");
+  let aiCostPreset = $state("low");
 
   // Notifications fine-tuned preferences
   let notifEnabled = $state(true);
@@ -66,6 +67,7 @@
         openaiApiKey = cfg.openaiApiKey || "";
         openaiModel = cfg.openaiModel || "gpt-4o-mini";
         openaiBaseUrl = cfg.openaiBaseUrl || "http://localhost:11434/v1";
+        aiCostPreset = cfg.aiCostPreset || "low";
 
         if (cfg.notifications) {
           notifEnabled = cfg.notifications.enabled ?? true;
@@ -123,6 +125,7 @@
         openaiApiKey: openaiApiKey.trim(),
         openaiModel: openaiModel.trim(),
         openaiBaseUrl: openaiBaseUrl.trim(),
+        aiCostPreset: aiCostPreset,
         notifications: {
           enabled: notifEnabled,
           pipelineSuccess: notifPipelineSuccess,
@@ -171,6 +174,7 @@
         openaiApiKey: openaiApiKey.trim(),
         openaiModel: openaiModel.trim(),
         openaiBaseUrl: openaiBaseUrl.trim(),
+        aiCostPreset: aiCostPreset,
         notifications: {
           enabled: notifEnabled,
           pipelineSuccess: notifPipelineSuccess,
@@ -549,6 +553,25 @@
             </div>
           </div>
         {/if}
+
+        <!-- AI Cost Preset -->
+        <div class="border-t border-slate-900 pt-3">
+          <label for="ai-cost-preset" class="block text-xs font-medium text-slate-400 mb-1">Context Size / Cost Preset</label>
+          <div class="flex items-center space-x-3">
+            <select
+              id="ai-cost-preset"
+              bind:value={aiCostPreset}
+              class="px-2.5 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition select-none"
+            >
+              <option value="low">Low (Minimum Context / Cost)</option>
+              <option value="medium">Medium (Balanced)</option>
+              <option value="high">High (Rich Context)</option>
+            </select>
+            <p class="text-slate-500 text-[10px]">
+              Controls the volume of diffs, description, and commits sent to the AI model.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
 

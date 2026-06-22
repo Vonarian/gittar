@@ -797,6 +797,38 @@ func (s *AppService) RefreshTodosOnly() (*gitlab.TelemetryPayload, error) {
 	}, nil
 }
 
+type CostLimit struct {
+	MaxDescChars  int
+	MaxCommits    int
+	MaxCommitMsg  int
+	MaxDiffFiles  int
+	MaxDiffChars  int
+}
+
+var (
+	costLimitLow = CostLimit{
+		MaxDescChars:  1000,
+		MaxCommits:    15,
+		MaxCommitMsg:  120,
+		MaxDiffFiles:  8,
+		MaxDiffChars:  800,
+	}
+	costLimitMedium = CostLimit{
+		MaxDescChars:  2500,
+		MaxCommits:    30,
+		MaxCommitMsg:  200,
+		MaxDiffFiles:  15,
+		MaxDiffChars:  2000,
+	}
+	costLimitHigh = CostLimit{
+		MaxDescChars:  5000,
+		MaxCommits:    60,
+		MaxCommitMsg:  400,
+		MaxDiffFiles:  30,
+		MaxDiffChars:  4000,
+	}
+)
+
 // GetMergeRequestSummary generates a concise markdown summary of an MR using Gemini, with local memory caching.
 func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool) (string, error) {
 	conf, err := config.LoadConfig()
@@ -812,6 +844,14 @@ func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool
 		if conf.OpenRouterAPIKey == "" {
 			return "", fmt.Errorf("openrouter API key is not configured in settings")
 		}
+	}
+
+	limitPreset := costLimitLow
+	switch strings.ToLower(conf.AICostPreset) {
+	case "medium":
+		limitPreset = costLimitMedium
+	case "high":
+		limitPreset = costLimitHigh
 	}
 
 	cacheKey := fmt.Sprintf("%d:%d", projectID, mrIID)
@@ -851,8 +891,8 @@ func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool
 	promptBuilder.WriteString(fmt.Sprintf("Title: %s\n", mr.Title))
 	if mr.Description != "" {
 		desc := mr.Description
-		if len(desc) > 1000 {
-			desc = desc[:1000] + "... (truncated)"
+		if len(desc) > limitPreset.MaxDescChars {
+			desc = desc[:limitPreset.MaxDescChars] + "... (truncated)"
 		}
 		promptBuilder.WriteString(fmt.Sprintf("Description: %s\n\n", desc))
 	} else {
@@ -862,13 +902,13 @@ func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool
 	if len(commits) > 0 {
 		promptBuilder.WriteString("Commits:\n")
 		limit := len(commits)
-		if limit > 15 {
-			limit = 15
+		if limit > limitPreset.MaxCommits {
+			limit = limitPreset.MaxCommits
 		}
 		for i := 0; i < limit; i++ {
 			msg := commits[i].Message
-			if len(msg) > 120 {
-				msg = msg[:120] + "..."
+			if len(msg) > limitPreset.MaxCommitMsg {
+				msg = msg[:limitPreset.MaxCommitMsg] + "..."
 			}
 			promptBuilder.WriteString(fmt.Sprintf("- %s (by %s)\n", strings.ReplaceAll(msg, "\n", " "), commits[i].AuthorName))
 		}
@@ -877,7 +917,7 @@ func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool
 
 	if changes != nil && len(changes.Changes) > 0 {
 		promptBuilder.WriteString("Changed Files:\n")
-		// Limit detailed diffs to first 8 files to manage prompt size and cost, list all names
+		// Limit detailed diffs to manage prompt size and cost, list all names
 		for idx, c := range changes.Changes {
 			status := "Modified"
 			if c.NewFile {
@@ -890,16 +930,16 @@ func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool
 
 			promptBuilder.WriteString(fmt.Sprintf("- %s: %s\n", status, c.NewPath))
 
-			if idx < 8 && c.Diff != "" {
+			if idx < limitPreset.MaxDiffFiles && c.Diff != "" {
 				diffText := c.Diff
-				if len(diffText) > 800 {
-					diffText = diffText[:800] + "\n  ... (diff truncated)"
+				if len(diffText) > limitPreset.MaxDiffChars {
+					diffText = diffText[:limitPreset.MaxDiffChars] + "\n  ... (diff truncated)"
 				}
 				promptBuilder.WriteString(fmt.Sprintf("  Diff:\n  \"\"\"\n%s\n  \"\"\"\n", diffText))
 			}
 		}
-		if len(changes.Changes) > 8 {
-			promptBuilder.WriteString(fmt.Sprintf("- ... and %d more files.\n", len(changes.Changes)-8))
+		if len(changes.Changes) > limitPreset.MaxDiffFiles {
+			promptBuilder.WriteString(fmt.Sprintf("- ... and %d more files.\n", len(changes.Changes)-limitPreset.MaxDiffFiles))
 		}
 		promptBuilder.WriteString("\n")
 	}

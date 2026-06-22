@@ -27,6 +27,7 @@ export class Config {
     "openaiApiKey": string;
     "openaiModel": string;
     "openaiBaseUrl": string;
+    "aiCostPreset": string;
 
     /** Creates a new Config instance. */
     constructor($$source: Partial<Config> = {}) {
@@ -83,6 +84,9 @@ export class Config {
         }
         if (!("openaiBaseUrl" in $$source)) {
             this["openaiBaseUrl"] = "";
+        }
+        if (!("aiCostPreset" in $$source)) {
+            this["aiCostPreset"] = "";
         }
 
         Object.assign(this, $$source);
