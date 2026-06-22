@@ -268,7 +268,7 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		wg.Add(1)
 		go func(path string) {
 			defer wg.Done()
-			pipes, err := client.GetPipelinesWithJobs(path, 10)
+			pipes, err := client.GetPipelinesWithJobs(path, 3)
 			if err == nil && len(pipes) > 0 {
 				pipeMu.Lock()
 				pipelines = append(pipelines, pipes...)
