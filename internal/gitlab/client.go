@@ -655,3 +655,18 @@ func (c *Client) CreateMergeRequestNote(projectID int, mrIID int, body string) (
 	return &note, nil
 }
 
+// GetMergeRequestChanges fetches the changed files and diffs in a merge request.
+func (c *Client) GetMergeRequestChanges(projectID int, mrIID int) (*MergeRequestChanges, error) {
+	path := fmt.Sprintf("projects/%d/merge_requests/%d/changes", projectID, mrIID)
+	data, _, err := c.doRequest(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var changes MergeRequestChanges
+	if err := json.Unmarshal(data, &changes); err != nil {
+		return nil, err
+	}
+	return &changes, nil
+}
+

@@ -33,6 +33,12 @@ type Config struct {
 	ProxyPort         int                  `json:"proxyPort"`
 	ProxyUser         string               `json:"proxyUser"`
 	ProxyPassword     string               `json:"proxyPassword"`
+	AIProvider        string               `json:"aiProvider"`
+	OpenRouterAPIKey  string               `json:"openrouterApiKey"`
+	OpenRouterModel   string               `json:"openrouterModel"`
+	OpenAIAPIKey      string               `json:"openaiApiKey"`
+	OpenAIModel       string               `json:"openaiModel"`
+	OpenAIBaseURL     string               `json:"openaiBaseUrl"`
 }
 
 // GetConfigDir returns the standard config directory for Gittar (~/.config/gittar).
@@ -60,6 +66,10 @@ func LoadConfig() (*Config, error) {
 			MonitoredGroups:   []string{},
 			MonitoredProjects: []string{},
 			PollIntervalSec:   30,
+			AIProvider:        "openrouter",
+			OpenRouterModel:   "google/gemini-2.5-flash",
+			OpenAIModel:       "gpt-4o-mini",
+			OpenAIBaseURL:     "http://localhost:11434/v1",
 			Notifications: NotificationSettings{
 				Enabled:         true,
 				PipelineSuccess: true,
@@ -89,6 +99,18 @@ func LoadConfig() (*Config, error) {
 	}
 	if conf.PollIntervalSec <= 0 {
 		conf.PollIntervalSec = 30
+	}
+	if conf.AIProvider == "" {
+		conf.AIProvider = "openrouter"
+	}
+	if conf.OpenRouterModel == "" {
+		conf.OpenRouterModel = "google/gemini-2.5-flash"
+	}
+	if conf.OpenAIModel == "" {
+		conf.OpenAIModel = "gpt-4o-mini"
+	}
+	if conf.OpenAIBaseURL == "" {
+		conf.OpenAIBaseURL = "http://localhost:11434/v1"
 	}
 
 	return &conf, nil

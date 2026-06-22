@@ -3,7 +3,9 @@ package tray
 import (
 	_ "embed"
 	"fmt"
+	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -45,13 +47,24 @@ func (ts *TrayService) init() {
 		ts.window.Show()
 		ts.window.Focus()
 	})
+}
 
-	// Request macOS authorization for notifications on start
-	if ts.notifier != nil {
-		go func() {
-			_, _ = ts.notifier.RequestNotificationAuthorization()
-		}()
+// RequestNotificationAuth requests authorization for desktop notifications on macOS after the app event loop starts.
+func (ts *TrayService) RequestNotificationAuth() {
+	if ts.notifier == nil || runtime.GOOS != "darwin" {
+		return
 	}
+
+	execPath, err := os.Executable()
+	if err != nil || !strings.Contains(execPath, ".app/Contents/MacOS") {
+		// Skip requesting notification permissions if not running inside a proper macOS app bundle
+		// to avoid triggering NSException crashes in raw CLI binaries.
+		return
+	}
+
+	go func() {
+		_, _ = ts.notifier.RequestNotificationAuthorization()
+	}()
 }
 
 // UpdateTray adjusts the system tray ticker text according to the pipeline statuses.
