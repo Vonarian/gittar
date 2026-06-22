@@ -130,6 +130,16 @@ export function MergeMergeRequest(projectID: number, mrIID: number): $Cancellabl
 }
 
 /**
+ * RefreshTodosOnly fetches only the todos list without triggering a full telemetry refresh.
+ * This is used as a lightweight background refresh after a todo is completed.
+ */
+export function RefreshTodosOnly(): $CancellablePromise<gitlab$0.TelemetryPayload | null> {
+    return $Call.ByID(533723586).then(($result: any) => {
+        return $$createType3($result);
+    });
+}
+
+/**
  * RetryPipeline retries a failed pipeline.
  */
 export function RetryPipeline(projectPath: string, pipelineID: number): $CancellablePromise<void> {
