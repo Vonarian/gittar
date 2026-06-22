@@ -154,3 +154,24 @@ type TelemetryPayload struct {
 	AvatarURL     string             `json:"avatarUrl"`
 	Error         string             `json:"error,omitempty"`
 }
+
+// MergeRequestDiff represents a changed file and its diff in a merge request.
+type MergeRequestDiff struct {
+	OldPath     string `json:"old_path"`
+	NewPath     string `json:"new_path"`
+	AMode       string `json:"a_mode"`
+	BMode       string `json:"b_mode"`
+	NewFile     bool   `json:"new_file"`
+	RenamedFile bool   `json:"renamed_file"`
+	DeletedFile bool   `json:"deleted_file"`
+	Diff        string `json:"diff"`
+}
+
+// MergeRequestChanges holds the merge request details and its changed files list.
+type MergeRequestChanges struct {
+	ID        int                `json:"id"`
+	IID       int                `json:"iid"`
+	ProjectID int                `json:"project_id"`
+	Title     string             `json:"title"`
+	Changes   []MergeRequestDiff `json:"changes"`
+}

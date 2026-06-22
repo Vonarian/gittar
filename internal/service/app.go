@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"gittar/internal/ai"
 	"gittar/internal/config"
 	"gittar/internal/gitlab"
 )
@@ -74,6 +75,8 @@ type AppService struct {
 	proxyPort      int
 	proxyUser      string
 	proxyPassword  string
+	mrSummaries    map[string]string
+	mrSummariesMu  sync.Mutex
 }
 
 // NewAppService creates a new application service instance.
@@ -84,6 +87,7 @@ func NewAppService() *AppService {
 		seenMRIDs:      make(map[int]bool),
 		mrStates:       make(map[int]mrState),
 		isFirstFetch:   true,
+		mrSummaries:    make(map[string]string),
 	}
 }
 
@@ -791,5 +795,151 @@ func (s *AppService) RefreshTodosOnly() (*gitlab.TelemetryPayload, error) {
 	return &gitlab.TelemetryPayload{
 		Todos: todos,
 	}, nil
+}
+
+// GetMergeRequestSummary generates a concise markdown summary of an MR using Gemini, with local memory caching.
+func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool) (string, error) {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return "", err
+	}
+
+	if conf.AIProvider == "openai" {
+		if conf.OpenAIBaseURL == "" {
+			return "", fmt.Errorf("openai base URL is not configured in settings")
+		}
+	} else {
+		if conf.OpenRouterAPIKey == "" {
+			return "", fmt.Errorf("openrouter API key is not configured in settings")
+		}
+	}
+
+	cacheKey := fmt.Sprintf("%d:%d", projectID, mrIID)
+	
+	if !force {
+		s.mrSummariesMu.Lock()
+		cached, exists := s.mrSummaries[cacheKey]
+		s.mrSummariesMu.Unlock()
+		if exists && cached != "" {
+			return cached, nil
+		}
+	}
+
+	client := s.getGitLabClient(conf)
+
+	// Fetch detailed MR
+	mr, err := client.GetSingleMergeRequest(projectID, mrIID, time.Time{})
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch MR details: %w", err)
+	}
+
+	// Fetch commits
+	commits, err := client.GetMergeRequestCommits(projectID, mrIID)
+	if err != nil {
+		fmt.Printf("[AppService] Failed to fetch MR commits: %v\n", err)
+	}
+
+	// Fetch changes
+	changes, err := client.GetMergeRequestChanges(projectID, mrIID)
+	if err != nil {
+		fmt.Printf("[AppService] Failed to fetch MR changes: %v\n", err)
+	}
+
+	// Build a cost-conscious structured prompt
+	var promptBuilder strings.Builder
+	promptBuilder.WriteString("You are Gittar, an AI helper. Summarize the following GitLab Merge Request.\n\n")
+	promptBuilder.WriteString(fmt.Sprintf("Title: %s\n", mr.Title))
+	if mr.Description != "" {
+		desc := mr.Description
+		if len(desc) > 1000 {
+			desc = desc[:1000] + "... (truncated)"
+		}
+		promptBuilder.WriteString(fmt.Sprintf("Description: %s\n\n", desc))
+	} else {
+		promptBuilder.WriteString("Description: No description provided.\n\n")
+	}
+
+	if len(commits) > 0 {
+		promptBuilder.WriteString("Commits:\n")
+		limit := len(commits)
+		if limit > 15 {
+			limit = 15
+		}
+		for i := 0; i < limit; i++ {
+			msg := commits[i].Message
+			if len(msg) > 120 {
+				msg = msg[:120] + "..."
+			}
+			promptBuilder.WriteString(fmt.Sprintf("- %s (by %s)\n", strings.ReplaceAll(msg, "\n", " "), commits[i].AuthorName))
+		}
+		promptBuilder.WriteString("\n")
+	}
+
+	if changes != nil && len(changes.Changes) > 0 {
+		promptBuilder.WriteString("Changed Files:\n")
+		// Limit detailed diffs to first 8 files to manage prompt size and cost, list all names
+		for idx, c := range changes.Changes {
+			status := "Modified"
+			if c.NewFile {
+				status = "Added"
+			} else if c.DeletedFile {
+				status = "Deleted"
+			} else if c.RenamedFile {
+				status = "Renamed"
+			}
+
+			promptBuilder.WriteString(fmt.Sprintf("- %s: %s\n", status, c.NewPath))
+
+			if idx < 8 && c.Diff != "" {
+				diffText := c.Diff
+				if len(diffText) > 800 {
+					diffText = diffText[:800] + "\n  ... (diff truncated)"
+				}
+				promptBuilder.WriteString(fmt.Sprintf("  Diff:\n  \"\"\"\n%s\n  \"\"\"\n", diffText))
+			}
+		}
+		if len(changes.Changes) > 8 {
+			promptBuilder.WriteString(fmt.Sprintf("- ... and %d more files.\n", len(changes.Changes)-8))
+		}
+		promptBuilder.WriteString("\n")
+	}
+
+	promptBuilder.WriteString("Please write a highly professional, structured, and concise summary of this Merge Request in Markdown format.\n")
+	promptBuilder.WriteString("The summary MUST include:\n")
+	promptBuilder.WriteString("1. **Core Goal**: A 1-2 sentence high-level overview of the MR's goal.\n")
+	promptBuilder.WriteString("2. **Key Changes**: A bulleted list of the most critical code/architectural changes.\n")
+	promptBuilder.WriteString("3. **Review Focus**: Highlights of any risk factors, complex logic, or specific files that reviewers should inspect closely.\n")
+	promptBuilder.WriteString("Keep the entire summary short, actionable, and visually appealing. Do not include introductory or concluding conversational text.")
+
+	type summaryGenerator interface {
+		GenerateSummary(prompt string) (string, error)
+	}
+
+	var aiClient summaryGenerator
+
+	if conf.AIProvider == "openai" {
+		model := conf.OpenAIModel
+		if model == "" {
+			model = "gpt-4o-mini"
+		}
+		aiClient = ai.NewOpenAIClient(conf.OpenAIAPIKey, model, conf.OpenAIBaseURL)
+	} else {
+		model := conf.OpenRouterModel
+		if model == "" {
+			model = "google/gemini-2.5-flash"
+		}
+		aiClient = ai.NewOpenAIClient(conf.OpenRouterAPIKey, model, "https://openrouter.ai/api/v1")
+	}
+
+	summary, err := aiClient.GenerateSummary(promptBuilder.String())
+	if err != nil {
+		return "", fmt.Errorf("failed to generate AI summary: %w", err)
+	}
+
+	s.mrSummariesMu.Lock()
+	s.mrSummaries[cacheKey] = summary
+	s.mrSummariesMu.Unlock()
+
+	return summary, nil
 }
 

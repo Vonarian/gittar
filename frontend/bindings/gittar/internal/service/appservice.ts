@@ -107,6 +107,13 @@ export function GetMergeRequestNotes(projectID: number, mrIID: number): $Cancell
 }
 
 /**
+ * GetMergeRequestSummary generates a concise markdown summary of an MR using Gemini, with local memory caching.
+ */
+export function GetMergeRequestSummary(projectID: number, mrIID: number, force: boolean): $CancellablePromise<string> {
+    return $Call.ByID(2745401687, projectID, mrIID, force);
+}
+
+/**
  * GetSingleMergeRequest fetches detailed information for a single MR from GitLab.
  */
 export function GetSingleMergeRequest(projectID: number, mrIID: number): $CancellablePromise<gitlab$0.MergeRequest | null> {
