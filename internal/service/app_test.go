@@ -265,10 +265,6 @@ func TestIssues(t *testing.T) {
 			_, _ = w.Write([]byte(`[]`))
 			return
 		}
-		if strings.HasPrefix(path, "/api/v4/merge_requests") {
-			_, _ = w.Write([]byte(`[]`))
-			return
-		}
 		if path == "/api/v4/projects/group/project1" {
 			_, _ = w.Write([]byte(`{"id": 1, "name": "project1", "path_with_namespace": "group/project1"}`))
 			return
@@ -279,10 +275,6 @@ func TestIssues(t *testing.T) {
 		}
 		if path == "/api/v4/projects/group/project1/pipelines" {
 			_, _ = w.Write([]byte(`[]`))
-			return
-		}
-		if path == "/api/v4/issues" {
-			_, _ = w.Write([]byte(`[{"id": 10, "iid": 100, "project_id": 1, "title": "User Issue 1", "state": "opened", "web_url": "http://example.com/group/project1/-/issues/100"}]`))
 			return
 		}
 		if path == "/api/v4/projects/group/project1/issues" {
@@ -312,24 +304,13 @@ func TestIssues(t *testing.T) {
 		t.Fatalf("unexpected fetch error: %v", err)
 	}
 
-	if len(payload.Issues) != 2 {
-		t.Errorf("expected 2 issues, got %d", len(payload.Issues))
+	if len(payload.Issues) != 1 {
+		t.Errorf("expected 1 project-level issue, got %d", len(payload.Issues))
 	}
 
-	// Verify details of the first issue
-	foundUserIssue := false
-	foundProjIssue := false
-	for _, issue := range payload.Issues {
-		if issue.Title == "User Issue 1" {
-			foundUserIssue = true
-		}
-		if issue.Title == "Project Issue 1" {
-			foundProjIssue = true
-		}
-	}
-
-	if !foundUserIssue || !foundProjIssue {
-		t.Errorf("did not find expected issues: user_issue=%t, proj_issue=%t", foundUserIssue, foundProjIssue)
+	// Verify it is the project-scoped issue
+	if len(payload.Issues) > 0 && payload.Issues[0].Title != "Project Issue 1" {
+		t.Errorf("expected 'Project Issue 1', got %s", payload.Issues[0].Title)
 	}
 
 	// Test closing the issue

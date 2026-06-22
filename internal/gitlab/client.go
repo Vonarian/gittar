@@ -176,8 +176,9 @@ func (c *Client) doRequestWithTTL(apiPath string, ttl time.Duration) ([]byte, bo
 
 
 // GetCurrentUser returns details of the currently authenticated user.
+// Cached for 1 hour — user identity is stable for the lifetime of a session.
 func (c *Client) GetCurrentUser() (*User, error) {
-	data, _, err := c.doRequest("user")
+	data, _, err := c.doRequestWithTTL("user", 1*time.Hour)
 	if err != nil {
 		return nil, err
 	}
@@ -331,82 +332,6 @@ func (c *Client) GetSingleMergeRequest(projectID int, mrIID int, updatedAt time.
 	return &mr, nil
 }
 
-// GetMergeRequests fetches merge requests authored by or assigned to the user.
-func (c *Client) GetMergeRequests(userID int) ([]MergeRequest, error) {
-	// Fetch assigned MRs
-	assignedData, _, err := c.doRequest("merge_requests?state=opened&scope=assigned_to_me&per_page=30")
-	if err != nil {
-		return nil, err
-	}
-
-	var assigned []MergeRequest
-	if err := json.Unmarshal(assignedData, &assigned); err != nil {
-		return nil, err
-	}
-
-	// Fetch authored MRs
-	authoredData, _, err := c.doRequest("merge_requests?state=opened&scope=created_by_me&per_page=30")
-	if err != nil {
-		return nil, err
-	}
-
-	var authored []MergeRequest
-	if err := json.Unmarshal(authoredData, &authored); err != nil {
-		return nil, err
-	}
-
-	// Fetch review requests MRs (where current user is a reviewer)
-	reviewerPath := fmt.Sprintf("merge_requests?state=opened&reviewer_id=%d&per_page=30", userID)
-	reviewerData, _, err := c.doRequest(reviewerPath)
-	var reviewerRequests []MergeRequest
-	if err == nil {
-		_ = json.Unmarshal(reviewerData, &reviewerRequests)
-	}
-
-	// Merge & Deduplicate
-	mrMap := make(map[int]MergeRequest)
-	for _, mr := range assigned {
-		mrMap[mr.ID] = mr
-	}
-	for _, mr := range authored {
-		mrMap[mr.ID] = mr
-	}
-	for _, mr := range reviewerRequests {
-		mrMap[mr.ID] = mr
-	}
-
-	result := make([]MergeRequest, 0, len(mrMap))
-	for _, mr := range mrMap {
-		result = append(result, mr)
-	}
-
-	// Fetch detailed MR information for each MR concurrently to populate head_pipeline if missing
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	detailedMRs := make([]MergeRequest, len(result))
-
-	for i, mr := range result {
-		wg.Add(1)
-		go func(idx int, m MergeRequest) {
-			defer wg.Done()
-			if m.HeadPipeline == nil {
-				detailed, err := c.GetSingleMergeRequest(m.ProjectID, m.IID, m.UpdatedAt)
-				if err == nil && detailed != nil {
-					mu.Lock()
-					detailedMRs[idx] = *detailed
-					mu.Unlock()
-					return
-				}
-			}
-			mu.Lock()
-			detailedMRs[idx] = m
-			mu.Unlock()
-		}(i, mr)
-	}
-	wg.Wait()
-
-	return detailedMRs, nil
-}
 
 // GetProjectMergeRequests fetches open merge requests for a project.
 func (c *Client) GetProjectMergeRequests(projectIDOrPath string) ([]MergeRequest, error) {
@@ -652,46 +577,6 @@ func (c *Client) CancelPipeline(projectPath string, pipelineID int) error {
 	return err
 }
 
-// GetIssues fetches issues authored by or assigned to the user.
-func (c *Client) GetIssues(userID int) ([]Issue, error) {
-	// Fetch assigned issues
-	assignedData, _, err := c.doRequest("issues?state=opened&scope=assigned_to_me&per_page=50")
-	if err != nil {
-		return nil, err
-	}
-
-	var assigned []Issue
-	if err := json.Unmarshal(assignedData, &assigned); err != nil {
-		return nil, err
-	}
-
-	// Fetch authored issues
-	authoredData, _, err := c.doRequest("issues?state=opened&scope=created_by_me&per_page=50")
-	if err != nil {
-		return nil, err
-	}
-
-	var authored []Issue
-	if err := json.Unmarshal(authoredData, &authored); err != nil {
-		return nil, err
-	}
-
-	// Merge & Deduplicate
-	issueMap := make(map[int]Issue)
-	for _, issue := range assigned {
-		issueMap[issue.ID] = issue
-	}
-	for _, issue := range authored {
-		issueMap[issue.ID] = issue
-	}
-
-	result := make([]Issue, 0, len(issueMap))
-	for _, issue := range issueMap {
-		result = append(result, issue)
-	}
-
-	return result, nil
-}
 
 // GetProjectIssues fetches open issues for a project.
 func (c *Client) GetProjectIssues(projectIDOrPath string) ([]Issue, error) {

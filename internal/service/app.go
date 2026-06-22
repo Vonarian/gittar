@@ -235,25 +235,19 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	// 3. Fetch all telemetry in parallel
 	var wg sync.WaitGroup
 	var todos []gitlab.Todo
-	var userMRs []gitlab.MergeRequest
-	var userIssues []gitlab.Issue
-	var todosErr, userMRsErr, userIssuesErr error
+	var todosErr error
 
-	wg.Add(3)
+	// Todos are cross-GitLab (mentions, assignments anywhere) and have no project-level equivalent.
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		todos, todosErr = client.GetTodos()
 	}()
-	go func() {
-		defer wg.Done()
-		userMRs, userMRsErr = client.GetMergeRequests(user.ID)
-	}()
-	go func() {
-		defer wg.Done()
-		userIssues, userIssuesErr = client.GetIssues(user.ID)
-	}()
 
-	// Fetch project-level pipelines, open MRs, and open issues concurrently
+	// Fetch project-level pipelines, open MRs, and open issues concurrently.
+	// GetProjectMergeRequests and GetProjectIssues return all open items in
+	// monitored repos (including user-assigned/authored), making global
+	// user-scoped list calls redundant.
 	var pipeMu sync.Mutex
 	pipelines := make([]gitlab.PipelineWithJobs, 0)
 
@@ -268,7 +262,7 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		wg.Add(1)
 		go func(path string) {
 			defer wg.Done()
-			pipes, err := client.GetPipelinesWithJobs(path, 10)
+			pipes, err := client.GetPipelinesWithJobs(path, 3)
 			if err == nil && len(pipes) > 0 {
 				pipeMu.Lock()
 				pipelines = append(pipelines, pipes...)
@@ -307,22 +301,11 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 	if todosErr != nil {
 		return nil, fmt.Errorf("failed to fetch todos: %w", todosErr)
 	}
-	if userMRsErr != nil {
-		return nil, fmt.Errorf("failed to fetch merge requests: %w", userMRsErr)
-	}
-	if userIssuesErr != nil {
-		return nil, fmt.Errorf("failed to fetch issues: %w", userIssuesErr)
-	}
 
-	// Deduplicate MRs between user-involved MRs and project-level MRs
+	// Deduplicate MRs across monitored projects
 	mrMap := make(map[int]gitlab.MergeRequest)
-	for _, mr := range userMRs {
-		mrMap[mr.ID] = mr
-	}
 	for _, mr := range projMRs {
-		if _, exists := mrMap[mr.ID]; !exists {
-			mrMap[mr.ID] = mr
-		}
+		mrMap[mr.ID] = mr
 	}
 
 	finalMRs := make([]gitlab.MergeRequest, 0, len(mrMap))
@@ -335,15 +318,10 @@ func (s *AppService) FetchTelemetry() (*gitlab.TelemetryPayload, error) {
 		return finalMRs[i].UpdatedAt.After(finalMRs[j].UpdatedAt)
 	})
 
-	// Deduplicate Issues between user-involved Issues and project-level Issues
+	// Deduplicate Issues across monitored projects
 	issueMap := make(map[int]gitlab.Issue)
-	for _, issue := range userIssues {
-		issueMap[issue.ID] = issue
-	}
 	for _, issue := range projIssues {
-		if _, exists := issueMap[issue.ID]; !exists {
-			issueMap[issue.ID] = issue
-		}
+		issueMap[issue.ID] = issue
 	}
 
 	finalIssues := make([]gitlab.Issue, 0, len(issueMap))
