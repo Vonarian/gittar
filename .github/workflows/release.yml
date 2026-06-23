@@ -14,18 +14,18 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -54,7 +54,7 @@ jobs:
           codesign --force --deep --sign - bin/Gittar.app
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Gittar-darwin-universal
           path: bin/Gittar.app
@@ -65,18 +65,18 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -94,7 +94,7 @@ jobs:
         run: go build -tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui" -o bin/Gittar.exe
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Gittar-windows-amd64
           path: bin/Gittar.exe
@@ -105,18 +105,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.25'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -125,7 +125,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc libc6-dev
           sudo apt-get install -y libgtk-3-dev libsoup-3.0-dev libwebkit2gtk-4.1-dev
-          sudo apt-get install -y gcc-aarch64-linux-gnu libc6-arm64-cross
 
       - name: Build frontend
         working-directory: frontend
@@ -138,20 +137,12 @@ jobs:
           CGO_ENABLED: '1'
         run: |
           GOOS=linux GOARCH=amd64 go build -tags "production,gtk3" -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-amd64
-          CC=aarch64-linux-gnu-gcc GOOS=linux GOARCH=arm64 go build -tags "production,gtk3" -trimpath -buildvcs=false -ldflags="-w -s" -o bin/Gittar-linux-arm64
 
-      - name: Upload Linux amd64 artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v7
         with:
           name: Gittar-linux-amd64
           path: bin/Gittar-linux-amd64
-          retention-days: 5
-
-      - name: Upload Linux arm64 artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Gittar-linux-arm64
-          path: bin/Gittar-linux-arm64
           retention-days: 5
 
   ci-pass:
