@@ -19,6 +19,13 @@
   let proxyPort = $state(1080);
   let proxyUser = $state("");
   let proxyPassword = $state("");
+  let aiProvider = $state("openrouter");
+  let openrouterApiKey = $state("");
+  let openrouterModel = $state("google/gemini-2.5-flash");
+  let openaiApiKey = $state("");
+  let openaiModel = $state("gpt-4o-mini");
+  let openaiBaseUrl = $state("http://localhost:11434/v1");
+  let aiCostPreset = $state("low");
 
   // Notifications fine-tuned preferences
   let notifEnabled = $state(true);
@@ -54,6 +61,13 @@
         proxyPort = cfg.proxyPort || 1080;
         proxyUser = cfg.proxyUser || "";
         proxyPassword = cfg.proxyPassword || "";
+        aiProvider = cfg.aiProvider || "openrouter";
+        openrouterApiKey = cfg.openrouterApiKey || "";
+        openrouterModel = cfg.openrouterModel || "google/gemini-2.5-flash";
+        openaiApiKey = cfg.openaiApiKey || "";
+        openaiModel = cfg.openaiModel || "gpt-4o-mini";
+        openaiBaseUrl = cfg.openaiBaseUrl || "http://localhost:11434/v1";
+        aiCostPreset = cfg.aiCostPreset || "low";
 
         if (cfg.notifications) {
           notifEnabled = cfg.notifications.enabled ?? true;
@@ -105,6 +119,13 @@
         proxyPort: proxyPort,
         proxyUser: proxyUser.trim(),
         proxyPassword: proxyPassword,
+        aiProvider: aiProvider,
+        openrouterApiKey: openrouterApiKey.trim(),
+        openrouterModel: openrouterModel.trim(),
+        openaiApiKey: openaiApiKey.trim(),
+        openaiModel: openaiModel.trim(),
+        openaiBaseUrl: openaiBaseUrl.trim(),
+        aiCostPreset: aiCostPreset,
         notifications: {
           enabled: notifEnabled,
           pipelineSuccess: notifPipelineSuccess,
@@ -147,6 +168,13 @@
         proxyPort: proxyPort,
         proxyUser: proxyUser.trim(),
         proxyPassword: proxyPassword,
+        aiProvider: aiProvider,
+        openrouterApiKey: openrouterApiKey.trim(),
+        openrouterModel: openrouterModel.trim(),
+        openaiApiKey: openaiApiKey.trim(),
+        openaiModel: openaiModel.trim(),
+        openaiBaseUrl: openaiBaseUrl.trim(),
+        aiCostPreset: aiCostPreset,
         notifications: {
           enabled: notifEnabled,
           pipelineSuccess: notifPipelineSuccess,
@@ -436,6 +464,115 @@
           </div>
         </div>
       {/if}
+    </div>
+
+    <!-- AI Agent & Summaries Settings -->
+    <div class="bg-slate-950/40 border border-slate-800/80 rounded-xl p-4 space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-sm font-bold text-white">AI Agent & Summaries</h3>
+          <p class="text-slate-500 text-xs mt-0.5">Enable agentic features and Merge Request summaries by selecting a provider.</p>
+        </div>
+        <select
+          bind:value={aiProvider}
+          class="px-2.5 py-1 bg-slate-955/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition select-none"
+        >
+          <option value="openrouter">OpenRouter</option>
+          <option value="openai">OpenAI-Compatible</option>
+        </select>
+      </div>
+
+      <div class="border-t border-slate-900 pt-3 space-y-4">
+        {#if aiProvider === "openrouter"}
+          <div class="grid grid-cols-3 gap-4">
+            <!-- OpenRouter API Key -->
+            <div class="col-span-2">
+              <label for="openrouter-apikey" class="block text-xs font-medium text-slate-400 mb-1">OpenRouter API Key</label>
+              <input
+                id="openrouter-apikey"
+                type="password"
+                bind:value={openrouterApiKey}
+                placeholder="sk-or-v1-..."
+                class="w-full px-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition font-mono"
+              />
+            </div>
+
+            <!-- OpenRouter Model -->
+            <div>
+              <label for="openrouter-model" class="block text-xs font-medium text-slate-400 mb-1">OpenRouter Model</label>
+              <input
+                id="openrouter-model"
+                type="text"
+                bind:value={openrouterModel}
+                placeholder="google/gemini-2.5-flash"
+                class="w-full px-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition font-mono"
+              />
+            </div>
+          </div>
+        {:else if aiProvider === "openai"}
+          <div class="space-y-4">
+            <div class="grid grid-cols-3 gap-4">
+              <!-- OpenAI Custom Base URL -->
+              <div class="col-span-3">
+                <label for="openai-baseurl" class="block text-xs font-medium text-slate-400 mb-1">Base URL</label>
+                <input
+                  id="openai-baseurl"
+                  type="text"
+                  bind:value={openaiBaseUrl}
+                  placeholder="http://localhost:11434/v1"
+                  class="w-full px-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition font-mono"
+                />
+                <p class="text-slate-500 text-[10px] mt-1">E.g., <code>http://localhost:11434/v1</code> for Ollama, or <code>https://api.openai.com/v1</code></p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4">
+              <!-- OpenAI API Key -->
+              <div class="col-span-2">
+                <label for="openai-apikey" class="block text-xs font-medium text-slate-400 mb-1">API Key (Optional)</label>
+                <input
+                  id="openai-apikey"
+                  type="password"
+                  bind:value={openaiApiKey}
+                  placeholder="Omit for local providers like Ollama"
+                  class="w-full px-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition font-mono"
+                />
+              </div>
+
+              <!-- OpenAI Model -->
+              <div>
+                <label for="openai-model" class="block text-xs font-medium text-slate-400 mb-1">Model Name</label>
+                <input
+                  id="openai-model"
+                  type="text"
+                  bind:value={openaiModel}
+                  placeholder="gpt-4o-mini or llama3"
+                  class="w-full px-3 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition font-mono"
+                />
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        <!-- AI Cost Preset -->
+        <div class="border-t border-slate-900 pt-3">
+          <label for="ai-cost-preset" class="block text-xs font-medium text-slate-400 mb-1">Context Size / Cost Preset</label>
+          <div class="flex items-center space-x-3">
+            <select
+              id="ai-cost-preset"
+              bind:value={aiCostPreset}
+              class="px-2.5 py-1.5 bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-lg text-slate-200 outline-none text-xs transition select-none"
+            >
+              <option value="low">Low (Minimum Context / Cost)</option>
+              <option value="medium">Medium (Balanced)</option>
+              <option value="high">High (Rich Context)</option>
+            </select>
+            <p class="text-slate-500 text-[10px]">
+              Controls the volume of diffs, description, and commits sent to the AI model.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <hr class="border-slate-800/80 my-2" />

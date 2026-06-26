@@ -21,6 +21,13 @@ export class Config {
     "proxyPort": number;
     "proxyUser": string;
     "proxyPassword": string;
+    "aiProvider": string;
+    "openrouterApiKey": string;
+    "openrouterModel": string;
+    "openaiApiKey": string;
+    "openaiModel": string;
+    "openaiBaseUrl": string;
+    "aiCostPreset": string;
 
     /** Creates a new Config instance. */
     constructor($$source: Partial<Config> = {}) {
@@ -59,6 +66,27 @@ export class Config {
         }
         if (!("proxyPassword" in $$source)) {
             this["proxyPassword"] = "";
+        }
+        if (!("aiProvider" in $$source)) {
+            this["aiProvider"] = "";
+        }
+        if (!("openrouterApiKey" in $$source)) {
+            this["openrouterApiKey"] = "";
+        }
+        if (!("openrouterModel" in $$source)) {
+            this["openrouterModel"] = "";
+        }
+        if (!("openaiApiKey" in $$source)) {
+            this["openaiApiKey"] = "";
+        }
+        if (!("openaiModel" in $$source)) {
+            this["openaiModel"] = "";
+        }
+        if (!("openaiBaseUrl" in $$source)) {
+            this["openaiBaseUrl"] = "";
+        }
+        if (!("aiCostPreset" in $$source)) {
+            this["aiCostPreset"] = "";
         }
 
         Object.assign(this, $$source);

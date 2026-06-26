@@ -7,7 +7,9 @@
     CreateMergeRequestNote,
     GetSingleMergeRequest,
     MergeMergeRequest,
-    CloseMergeRequest
+    CloseMergeRequest,
+    GetMergeRequestSummary,
+    GetConfig
   } from "../../../bindings/gittar/internal/service/appservice";
   import { Browser } from "@wailsio/runtime";
 
@@ -21,8 +23,8 @@
 
   let { isOpen, mr, username, onClose, onRefreshList }: Props = $props();
 
-  // Selected tab in the drawer: 'overview' | 'commits' | 'comments'
-  let activeTab = $state<"overview" | "commits" | "comments">("overview");
+  // Selected tab in the drawer: 'overview' | 'commits' | 'comments' | 'summary'
+  let activeTab = $state<"overview" | "commits" | "comments" | "summary">("overview");
 
   // State
   let detailedMR = $state<MergeRequest | null>(null);
@@ -35,6 +37,12 @@
   let isPostingComment = $state(false);
   let isProcessingAction = $state<"merging" | "closing" | null>(null);
   let isActivityExpanded = $state(true);
+
+  // AI Summary state
+  let aiSummary = $state("");
+  let isGeneratingSummary = $state(false);
+  let isGeminiConfigured = $state(false);
+  let summaryError = $state("");
 
   onMount(() => {
     (window as any).__openExternal = (url: string) => {
@@ -245,6 +253,43 @@
     }
   }
 
+  async function checkAIConfig() {
+    try {
+      const cfg = await GetConfig();
+      isGeminiConfigured = !!(cfg && (
+        (cfg.aiProvider === "openai" && cfg.openaiBaseUrl) ||
+        (cfg.aiProvider === "openrouter" && cfg.openrouterApiKey)
+      ));
+    } catch (e) {
+      console.error("[MRInspectorPanel] failed to get config:", e);
+      isGeminiConfigured = false;
+    }
+  }
+
+  async function generateSummary(force = false) {
+    if (!mr) return;
+    isGeneratingSummary = true;
+    summaryError = "";
+    try {
+      const result = await GetMergeRequestSummary(mr.project_id, mr.iid, force);
+      aiSummary = result;
+    } catch (e: any) {
+      console.error("[MRInspectorPanel] failed to generate summary:", e);
+      summaryError = e.message || "Failed to generate AI summary.";
+    } finally {
+      isGeneratingSummary = false;
+    }
+  }
+
+  // Automatic AI summary trigger when entering summary tab
+  $effect(() => {
+    if (activeTab === "summary" && !aiSummary && isGeminiConfigured && !isGeneratingSummary && !summaryError) {
+      untrack(() => {
+        generateSummary(false);
+      });
+    }
+  });
+
   // React to MR selection changes
   $effect(() => {
     if (isOpen && mr) {
@@ -252,6 +297,9 @@
         detailedMR = mr; // Set initial state from props first
         activeTab = "overview";
         newCommentText = "";
+        aiSummary = ""; // Clear old summary when a different MR is opened
+        summaryError = "";
+        checkAIConfig();
         refreshAll();
       });
     }
@@ -387,6 +435,16 @@
           {#if notes.length > 0}
             <span class="px-1.5 py-0.2 bg-slate-900 border border-slate-800 text-[10px] text-slate-400 rounded-full font-mono">{userCommentsCount}</span>
           {/if}
+        </button>
+
+        <button
+          onclick={() => (activeTab = "summary")}
+          class="pb-2 text-xs font-semibold border-b-2 transition-colors duration-150 flex items-center space-x-1.5 {activeTab === 'summary' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-400 hover:text-slate-200'}"
+        >
+          <svg class="w-3.5 h-3.5 mr-0.5 text-indigo-405 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 21l-.813-5.096L3.096 15 8.2 14.187 9 9l.813 5.187 5.096.813-5.096.904zM19.006 5.006L18.5 8l-.5-2.994-2.994-.5 2.994-.5.5-2.994.5 2.994 2.994.5-2.994.5zm-2.5 12l-.25 1.5-.25-1.5-1.5-.25 1.5-.25.25-1.5.25 1.5 1.5.25-1.5.25z" />
+          </svg>
+          <span>AI Summary</span>
         </button>
       </div>
     </div>
@@ -815,7 +873,99 @@
           </div>
         </div>
       {/if}
-      
+
+      <!-- 4. AI SUMMARY TAB -->
+      {#if activeTab === "summary"}
+        <div class="h-full overflow-y-auto p-6 flex flex-col space-y-6">
+          <div class="flex items-center justify-between border-b border-slate-900/60 pb-3 select-none">
+            <div class="flex items-center space-x-2">
+              <svg class="w-4 h-4 text-indigo-405" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 21l-.813-5.096L3.096 15 8.2 14.187 9 9l.813 5.187 5.096.813-5.096.904zM19.006 5.006L18.5 8l-.5-2.994-2.994-.5 2.994-.5.5-2.994.5 2.994 2.994.5-2.994.5zm-2.5 12l-.25 1.5-.25-1.5-1.5-.25 1.5-.25.25-1.5.25 1.5 1.5.25-1.5.25z" />
+              </svg>
+              <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">AI Merge Request Summary</h3>
+            </div>
+            
+            {#if isGeminiConfigured && aiSummary && !isGeneratingSummary}
+              <button
+                onclick={() => generateSummary(true)}
+                class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-slate-350 border border-slate-800 rounded-lg text-[10px] font-mono tracking-tight transition cursor-pointer flex items-center space-x-1.5"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+                <span>Regenerate</span>
+              </button>
+            {/if}
+          </div>
+
+          {#if !isGeminiConfigured}
+            <!-- Not Configured Alert -->
+            <div class="bg-indigo-950/10 border border-indigo-900/40 rounded-2xl p-6 text-center max-w-md mx-auto my-auto space-y-4 shadow-xl">
+              <div class="w-12 h-12 bg-indigo-950/40 border border-indigo-900/60 rounded-full flex items-center justify-center mx-auto text-indigo-400">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 21l-.813-5.096L3.096 15 8.2 14.187 9 9l.813 5.187 5.096.813-5.096.904zM19.006 5.006L18.5 8l-.5-2.994-2.994-.5 2.994-.5.5-2.994.5 2.994 2.994.5-2.994.5zm-2.5 12l-.25 1.5-.25-1.5-1.5-.25 1.5-.25.25-1.5.25 1.5 1.5.25-1.5.25z" />
+                </svg>
+              </div>
+              <div>
+                <h4 class="text-sm font-semibold text-slate-200">AI Configuration Required</h4>
+                <p class="text-xs text-slate-450 mt-1.5 leading-relaxed">
+                  Provide your OpenAI-Compatible Base URL or OpenRouter API Key in Settings/Setup to generate instant, context-aware summaries of your Merge Requests.
+                </p>
+              </div>
+              <p class="text-[10px] text-slate-500 italic">
+                Note: Go to the "Setup" tab in the sidebar to enter your key.
+              </p>
+            </div>
+          {:else if isGeneratingSummary}
+            <!-- Skeleton/Shimmer Loader -->
+            <div class="space-y-4 animate-pulse">
+              <div class="h-4 bg-slate-900/60 border border-slate-900 rounded w-1/3"></div>
+              <div class="space-y-2">
+                <div class="h-3 bg-slate-900/60 border border-slate-900 rounded w-full"></div>
+                <div class="h-3 bg-slate-900/60 border border-slate-900 rounded w-5/6"></div>
+                <div class="h-3 bg-slate-900/60 border border-slate-900 rounded w-4/5"></div>
+              </div>
+              <div class="h-4 bg-slate-900/60 border border-slate-900 rounded w-1/4 pt-4"></div>
+              <div class="space-y-2">
+                <div class="h-3 bg-slate-900/60 border border-slate-900 rounded w-full"></div>
+                <div class="h-3 bg-slate-900/60 border border-slate-900 rounded w-11/12"></div>
+                <div class="h-3 bg-slate-900/60 border border-slate-900 rounded w-3/4"></div>
+              </div>
+              <div class="py-10 flex flex-col items-center justify-center space-y-3">
+                <div class="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                <p class="text-[10px] text-slate-500 font-mono tracking-wide uppercase">Gittar is summarizing changes...</p>
+              </div>
+            </div>
+          {:else if summaryError}
+            <div class="bg-rose-950/10 border border-rose-900/30 rounded-xl p-4 text-xs text-rose-455 font-mono space-y-3">
+              <p>✗ {summaryError}</p>
+              <button
+                onclick={() => generateSummary(true)}
+                class="px-3 py-1 bg-rose-900/20 hover:bg-rose-900/35 border border-rose-900/40 text-rose-300 rounded font-sans transition cursor-pointer"
+              >
+                Retry Generation
+              </button>
+            </div>
+          {:else if aiSummary}
+            <!-- AI Summary Markdown Result -->
+            <div class="bg-slate-950/40 border border-slate-900/60 rounded-xl p-5 text-sm text-slate-350 leading-relaxed overflow-x-auto selection:bg-indigo-500/30 select-text">
+              {@html formatMarkdown(aiSummary)}
+            </div>
+          {:else}
+            <!-- Empty/Initial state -->
+            <div class="text-center py-12 space-y-4">
+              <p class="text-xs text-slate-500 italic">No summary generated yet.</p>
+              <button
+                onclick={() => generateSummary(false)}
+                class="px-4 py-2 bg-indigo-655 hover:bg-indigo-600 border border-indigo-500/20 text-white rounded-lg text-xs font-semibold shadow-sm transition cursor-pointer"
+              >
+                Generate AI Summary
+              </button>
+            </div>
+          {/if}
+        </div>
+      {/if}
+
     </div>
   {:else}
     <!-- Empty State / Missing MR -->
