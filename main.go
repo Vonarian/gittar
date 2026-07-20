@@ -16,6 +16,7 @@ import (
 )
 
 // Wails uses Go's `embed` package to embed the frontend files into the binary.
+//
 //go:embed all:frontend/dist
 var assets embed.FS
 
@@ -50,9 +51,9 @@ func main() {
 
 	// 3. Configure the main window (Dynamic cross-platform options)
 	windowOptions := application.WebviewWindowOptions{
-		Title:  "Gittar",
-		Width:  1200,
-		Height: 800,
+		Title:            "Gittar",
+		Width:            1200,
+		Height:           800,
 		BackgroundColour: application.NewRGBA(13, 17, 23, 150), // Transparent dark tint for vibrant Acrylic blur
 		URL:              "/",
 	}

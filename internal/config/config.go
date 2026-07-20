@@ -21,25 +21,25 @@ type NotificationSettings struct {
 
 // Config holds the user settings for Gittar.
 type Config struct {
-	GitLabURL         string               `json:"gitlabUrl"`
-	Token             string               `json:"token"`
-	MonitoredGroups   []string             `json:"monitoredGroups"`
-	MonitoredProjects []string             `json:"monitoredProjects"`
-	PollIntervalSec   int                  `json:"pollIntervalSec"`
-	Notifications     NotificationSettings `json:"notifications"`
+	GitLabURL             string               `json:"gitlabUrl"`
+	Token                 string               `json:"token"`
+	MonitoredGroups       []string             `json:"monitoredGroups"`
+	MonitoredProjects     []string             `json:"monitoredProjects"`
+	PollIntervalSec       int                  `json:"pollIntervalSec"`
+	Notifications         NotificationSettings `json:"notifications"`
 	IgnoreFailedPipelines bool                 `json:"ignoreFailedPipelines"`
-	ProxyEnabled      bool                 `json:"proxyEnabled"`
-	ProxyHost         string               `json:"proxyHost"`
-	ProxyPort         int                  `json:"proxyPort"`
-	ProxyUser         string               `json:"proxyUser"`
-	ProxyPassword     string               `json:"proxyPassword"`
-	AIProvider        string               `json:"aiProvider"`
-	OpenRouterAPIKey  string               `json:"openrouterApiKey"`
-	OpenRouterModel   string               `json:"openrouterModel"`
-	OpenAIAPIKey      string               `json:"openaiApiKey"`
-	OpenAIModel       string               `json:"openaiModel"`
-	OpenAIBaseURL     string               `json:"openaiBaseUrl"`
-	AICostPreset      string               `json:"aiCostPreset"`
+	ProxyEnabled          bool                 `json:"proxyEnabled"`
+	ProxyHost             string               `json:"proxyHost"`
+	ProxyPort             int                  `json:"proxyPort"`
+	ProxyUser             string               `json:"proxyUser"`
+	ProxyPassword         string               `json:"proxyPassword"`
+	AIProvider            string               `json:"aiProvider"`
+	OpenRouterAPIKey      string               `json:"openrouterApiKey"`
+	OpenRouterModel       string               `json:"openrouterModel"`
+	OpenAIAPIKey          string               `json:"openaiApiKey"`
+	OpenAIModel           string               `json:"openaiModel"`
+	OpenAIBaseURL         string               `json:"openaiBaseUrl"`
+	AICostPreset          string               `json:"aiCostPreset"`
 }
 
 // GetConfigDir returns the standard config directory for Gittar (~/.config/gittar).

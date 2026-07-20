@@ -318,7 +318,6 @@ func TestGetPipelinesWithJobs_Caching(t *testing.T) {
 	}
 }
 
-
 func TestGetSingleMergeRequest_DynamicTTL(t *testing.T) {
 	var detailedCallCount int32
 	var pipelineStatus = "running"
@@ -486,5 +485,3 @@ func TestCreateMergeRequestNote(t *testing.T) {
 		t.Errorf("unexpected note: %v", note)
 	}
 }
-
-

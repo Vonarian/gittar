@@ -116,7 +116,6 @@ func (s *AppService) GetCachedTelemetry() (*gitlab.TelemetryPayload, error) {
 	return &payload, nil
 }
 
-
 // getGitLabClient retrieves the cached GitLab client or creates one if the config changed.
 func (s *AppService) getGitLabClient(conf *config.Config) *gitlab.Client {
 	s.stateMu.Lock()
@@ -158,8 +157,9 @@ func (s *AppService) getGitLabClient(conf *config.Config) *gitlab.Client {
 	return s.gitlabClient
 }
 
-//wails:ignore
 // SetTray links the system tray manager to the application service.
+//
+//wails:ignore
 func (s *AppService) SetTray(t Notifier) {
 	s.trayService = t
 }
@@ -778,6 +778,7 @@ func (s *AppService) GetSingleMergeRequest(projectID int, mrIID int) (*gitlab.Me
 	client := s.getGitLabClient(conf)
 	return client.GetSingleMergeRequest(projectID, mrIID, time.Time{})
 }
+
 // RefreshTodosOnly fetches only the todos list without triggering a full telemetry refresh.
 // This is used as a lightweight background refresh after a todo is completed.
 func (s *AppService) RefreshTodosOnly() (*gitlab.TelemetryPayload, error) {
@@ -786,46 +787,46 @@ func (s *AppService) RefreshTodosOnly() (*gitlab.TelemetryPayload, error) {
 		return nil, err
 	}
 	client := s.getGitLabClient(conf)
-	
+
 	todos, err := client.GetTodos()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &gitlab.TelemetryPayload{
 		Todos: todos,
 	}, nil
 }
 
 type CostLimit struct {
-	MaxDescChars  int
-	MaxCommits    int
-	MaxCommitMsg  int
-	MaxDiffFiles  int
-	MaxDiffChars  int
+	MaxDescChars int
+	MaxCommits   int
+	MaxCommitMsg int
+	MaxDiffFiles int
+	MaxDiffChars int
 }
 
 var (
 	costLimitLow = CostLimit{
-		MaxDescChars:  1000,
-		MaxCommits:    15,
-		MaxCommitMsg:  120,
-		MaxDiffFiles:  8,
-		MaxDiffChars:  800,
+		MaxDescChars: 1000,
+		MaxCommits:   15,
+		MaxCommitMsg: 120,
+		MaxDiffFiles: 8,
+		MaxDiffChars: 800,
 	}
 	costLimitMedium = CostLimit{
-		MaxDescChars:  2500,
-		MaxCommits:    30,
-		MaxCommitMsg:  200,
-		MaxDiffFiles:  15,
-		MaxDiffChars:  2000,
+		MaxDescChars: 2500,
+		MaxCommits:   30,
+		MaxCommitMsg: 200,
+		MaxDiffFiles: 15,
+		MaxDiffChars: 2000,
 	}
 	costLimitHigh = CostLimit{
-		MaxDescChars:  5000,
-		MaxCommits:    60,
-		MaxCommitMsg:  400,
-		MaxDiffFiles:  30,
-		MaxDiffChars:  4000,
+		MaxDescChars: 5000,
+		MaxCommits:   60,
+		MaxCommitMsg: 400,
+		MaxDiffFiles: 30,
+		MaxDiffChars: 4000,
 	}
 )
 
@@ -855,7 +856,7 @@ func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool
 	}
 
 	cacheKey := fmt.Sprintf("%d:%d", projectID, mrIID)
-	
+
 	if !force {
 		s.mrSummariesMu.Lock()
 		cached, exists := s.mrSummaries[cacheKey]
@@ -982,4 +983,3 @@ func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool
 
 	return summary, nil
 }
-
