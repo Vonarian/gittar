@@ -78,14 +78,14 @@ func NewClient(baseURL, token string, proxyConf *ProxyConfig) *Client {
 	}
 
 	return &Client{
-		BaseURL:    baseURL,
-		Token:      token,
+		BaseURL: baseURL,
+		Token:   token,
 		HTTPClient: &http.Client{
 			Timeout:   30 * time.Second,
 			Transport: transport,
 		},
-		cache:      make(map[string]*cacheEntry),
-		limiter:    limiter,
+		cache:   make(map[string]*cacheEntry),
+		limiter: limiter,
 	}
 }
 
@@ -174,7 +174,6 @@ func (c *Client) doRequestWithTTL(apiPath string, ttl time.Duration) ([]byte, bo
 	return bodyBytes, false, nil
 }
 
-
 // GetCurrentUser returns details of the currently authenticated user.
 // Cached for 1 hour — user identity is stable for the lifetime of a session.
 func (c *Client) GetCurrentUser() (*User, error) {
@@ -222,7 +221,7 @@ func (c *Client) GetProjectDetails(projectIDOrPath string) (*ProjectRef, error) 
 // GetPipelineWithJobs fetches the latest pipeline for a project, along with its individual jobs.
 func (c *Client) GetPipelineWithJobs(projectIDOrPath string) (*PipelineWithJobs, error) {
 	escapedPath := url.PathEscape(projectIDOrPath)
-	
+
 	// 1. Get project details to know name/path
 	proj, err := c.GetProjectDetails(projectIDOrPath)
 	if err != nil {
@@ -332,7 +331,6 @@ func (c *Client) GetSingleMergeRequest(projectID int, mrIID int, updatedAt time.
 	return &mr, nil
 }
 
-
 // GetProjectMergeRequests fetches open merge requests for a project.
 func (c *Client) GetProjectMergeRequests(projectIDOrPath string) ([]MergeRequest, error) {
 	escapedPath := url.PathEscape(projectIDOrPath)
@@ -370,7 +368,6 @@ func (c *Client) GetProjectMergeRequests(projectIDOrPath string) ([]MergeRequest
 		}(i, mr)
 	}
 	wg.Wait()
-
 
 	return detailedMRs, nil
 }
@@ -577,7 +574,6 @@ func (c *Client) CancelPipeline(projectPath string, pipelineID int) error {
 	return err
 }
 
-
 // GetProjectIssues fetches open issues for a project.
 func (c *Client) GetProjectIssues(projectIDOrPath string) ([]Issue, error) {
 	escapedPath := url.PathEscape(projectIDOrPath)
@@ -669,4 +665,3 @@ func (c *Client) GetMergeRequestChanges(projectID int, mrIID int) (*MergeRequest
 	}
 	return &changes, nil
 }
-

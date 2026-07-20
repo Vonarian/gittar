@@ -471,5 +471,3 @@ func TestAICostPresetDefaults(t *testing.T) {
 		t.Errorf("expected AICostPreset to be 'medium', got '%s'", confMedium.AICostPreset)
 	}
 }
-
-
