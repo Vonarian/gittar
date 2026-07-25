@@ -125,8 +125,19 @@
     if (!text) return "";
     
     // Replace markdown links with clickable external links routed through Wails Browser.OpenURL
-    let formatted = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText, url) => {
-      return `<a href="javascript:void(0)" onclick="window.__openExternal('${url}')" class="text-indigo-400 hover:underline hover:text-indigo-350 transition duration-150">${linkText}</a>`;
+    let formatted = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, linkText, url) => {
+      const cleanUrl = url.trim();
+      const lowerUrl = cleanUrl.toLowerCase();
+      if (!lowerUrl.startsWith('http://') && !lowerUrl.startsWith('https://')) {
+        return match;
+      }
+      const safeUrl = cleanUrl
+        .replace(/'/g, "%27")
+        .replace(/"/g, "%22")
+        .replace(/&apos;/g, "%27")
+        .replace(/&#x27;/gi, "%27")
+        .replace(/&#39;/g, "%27");
+      return `<a href="javascript:void(0)" onclick="window.__openExternal('${safeUrl}')" class="text-indigo-400 hover:underline hover:text-indigo-350 transition duration-150">${linkText}</a>`;
     });
     
     // Format inline code/hashes `c9c77ced`
