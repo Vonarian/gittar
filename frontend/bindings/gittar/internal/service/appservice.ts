@@ -17,6 +17,22 @@ import * as config$0 from "../config/models.js";
 // @ts-ignore: Unused imports
 import * as gitlab$0 from "../gitlab/models.js";
 
+export interface PipelineRCAResult {
+    job_id: number;
+    job_name: string;
+    root_cause: string;
+    error_snippet: string;
+    suggested_fix: string;
+    analysis_format: string;
+}
+
+/**
+ * AnalyzePipelineFailure performs AI-powered root-cause analysis on a failed CI job.
+ */
+export function AnalyzePipelineFailure(projectPath: string, jobID: number, jobName: string, force: boolean): $CancellablePromise<PipelineRCAResult | null> {
+    return $Call.ByName("gittar/internal/service.AppService.AnalyzePipelineFailure", projectPath, jobID, jobName, force);
+}
+
 /**
  * CancelPipeline cancels a running pipeline.
  */
