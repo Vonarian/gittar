@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -20,6 +21,16 @@ import (
 type Notifier interface {
 	Notify(title, body string) error
 	UpdateTray(passing, failing, running int)
+}
+
+// PipelineRCAResult contains the structured diagnosis for a failed CI job.
+type PipelineRCAResult struct {
+	JobID          int    `json:"job_id"`
+	JobName        string `json:"job_name"`
+	RootCause      string `json:"root_cause"`
+	ErrorSnippet   string `json:"error_snippet"`
+	SuggestedFix   string `json:"suggested_fix"`
+	AnalysisFormat string `json:"analysis_format"`
 }
 
 // pipelineState tracks the ID and status of a pipeline run.
@@ -60,34 +71,37 @@ func getPipelineStatus(hp *gitlab.HeadPipeline) string {
 
 // AppService handles bindings and telemetry orchestration.
 type AppService struct {
-	trayService    Notifier
-	gitlabClient   *gitlab.Client
-	gitlabURL      string
-	gitlabToken    string
-	pipelineStates map[string]pipelineState
-	seenTodoIDs    map[int]bool
-	seenMRIDs      map[int]bool
-	mrStates       map[int]mrState
-	isFirstFetch   bool
-	stateMu        sync.Mutex
-	proxyEnabled   bool
-	proxyHost      string
-	proxyPort      int
-	proxyUser      string
-	proxyPassword  string
-	mrSummaries    map[string]string
-	mrSummariesMu  sync.Mutex
+	trayService        Notifier
+	gitlabClient       *gitlab.Client
+	gitlabURL          string
+	gitlabToken        string
+	pipelineStates     map[string]pipelineState
+	seenTodoIDs        map[int]bool
+	seenMRIDs          map[int]bool
+	mrStates           map[int]mrState
+	isFirstFetch       bool
+	stateMu            sync.Mutex
+	proxyEnabled       bool
+	proxyHost          string
+	proxyPort          int
+	proxyUser          string
+	proxyPassword      string
+	mrSummaries        map[string]string
+	mrSummariesMu      sync.Mutex
+	pipelineRCAResults map[string]*PipelineRCAResult
+	pipelineRCAMu      sync.Mutex
 }
 
 // NewAppService creates a new application service instance.
 func NewAppService() *AppService {
 	return &AppService{
-		pipelineStates: make(map[string]pipelineState),
-		seenTodoIDs:    make(map[int]bool),
-		seenMRIDs:      make(map[int]bool),
-		mrStates:       make(map[int]mrState),
-		isFirstFetch:   true,
-		mrSummaries:    make(map[string]string),
+		pipelineStates:     make(map[string]pipelineState),
+		seenTodoIDs:        make(map[int]bool),
+		seenMRIDs:          make(map[int]bool),
+		mrStates:           make(map[int]mrState),
+		isFirstFetch:       true,
+		mrSummaries:        make(map[string]string),
+		pipelineRCAResults: make(map[string]*PipelineRCAResult),
 	}
 }
 
@@ -983,3 +997,147 @@ func (s *AppService) GetMergeRequestSummary(projectID int, mrIID int, force bool
 
 	return summary, nil
 }
+
+var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]|\x1b\([B0K]`)
+
+func stripAnsiCodes(text string) string {
+	if text == "" {
+		return ""
+	}
+	return ansiRegex.ReplaceAllString(text, "")
+}
+
+func extractSection(markdown, header string) string {
+	lines := strings.Split(markdown, "\n")
+	var result []string
+	recording := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "###") && strings.Contains(strings.ToLower(trimmed), strings.ToLower(header)) {
+			recording = true
+			continue
+		} else if strings.HasPrefix(trimmed, "###") && recording {
+			break
+		}
+
+		if recording {
+			result = append(result, line)
+		}
+	}
+
+	res := strings.TrimSpace(strings.Join(result, "\n"))
+	if res == "" {
+		return markdown
+	}
+	return res
+}
+
+// AnalyzePipelineFailure performs AI-powered root-cause analysis on a failed CI job.
+func (s *AppService) AnalyzePipelineFailure(projectPath string, jobID int, jobName string, force bool) (*PipelineRCAResult, error) {
+	conf, err := config.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	if conf.AIProvider == "openai" {
+		if conf.OpenAIBaseURL == "" {
+			return nil, fmt.Errorf("openai base URL is not configured in settings")
+		}
+	} else {
+		if conf.OpenRouterAPIKey == "" {
+			return nil, fmt.Errorf("openrouter API key is not configured in settings")
+		}
+	}
+
+	cacheKey := fmt.Sprintf("%s:%d", projectPath, jobID)
+
+	if !force {
+		s.pipelineRCAMu.Lock()
+		cached, exists := s.pipelineRCAResults[cacheKey]
+		s.pipelineRCAMu.Unlock()
+		if exists && cached != nil {
+			return cached, nil
+		}
+	}
+
+	rawLogs, err := s.GetJobLogSnippet(projectPath, jobID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch job log: %w", err)
+	}
+
+	cleanLogs := stripAnsiCodes(rawLogs)
+	if strings.TrimSpace(cleanLogs) == "" {
+		return nil, fmt.Errorf("job log trace was empty")
+	}
+
+	// Limit log context window according to AICostPreset
+	maxChars := 1500
+	switch strings.ToLower(conf.AICostPreset) {
+	case "medium":
+		maxChars = 3500
+	case "high":
+		maxChars = 7000
+	}
+
+	if len(cleanLogs) > maxChars {
+		// Keep the tail of the log where failure errors usually occur
+		cleanLogs = "... (older logs truncated)\n" + cleanLogs[len(cleanLogs)-maxChars:]
+	}
+
+	var promptBuilder strings.Builder
+	promptBuilder.WriteString("You are Gittar, an expert DevOps and CI/CD AI assistant. Perform root-cause analysis on this failed GitLab CI/CD job log snippet.\n\n")
+	promptBuilder.WriteString(fmt.Sprintf("Project: %s\nJob Name: %s\nJob ID: %d\n\n", projectPath, jobName, jobID))
+	promptBuilder.WriteString("Job Log Output:\n\"\"\"\n")
+	promptBuilder.WriteString(cleanLogs)
+	promptBuilder.WriteString("\n\"\"\"\n\n")
+	promptBuilder.WriteString("Analyze the log and produce a clear, highly structured Markdown report containing exactly three headers:\n")
+	promptBuilder.WriteString("### 🎯 Root Cause\nA 1-2 sentence explanation of why this job failed.\n\n")
+	promptBuilder.WriteString("### 📍 Error Location\nThe exact error line, exception message, or stack trace snippet.\n\n")
+	promptBuilder.WriteString("### 💡 Suggested Fix\nActionable step-by-step resolution or code/configuration patch.\n")
+	promptBuilder.WriteString("Do not include introductory or closing chit-chat.")
+
+	type summaryGenerator interface {
+		GenerateSummary(prompt string) (string, error)
+	}
+
+	var aiClient summaryGenerator
+	if conf.AIProvider == "openai" {
+		model := conf.OpenAIModel
+		if model == "" {
+			model = "gpt-4o-mini"
+		}
+		aiClient = ai.NewOpenAIClient(conf.OpenAIAPIKey, model, conf.OpenAIBaseURL)
+	} else {
+		model := conf.OpenRouterModel
+		if model == "" {
+			model = "google/gemini-2.5-flash"
+		}
+		aiClient = ai.NewOpenAIClient(conf.OpenRouterAPIKey, model, "https://openrouter.ai/api/v1")
+	}
+
+	markdownReport, err := aiClient.GenerateSummary(promptBuilder.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate RCA from AI API: %w", err)
+	}
+
+	rootCause := extractSection(markdownReport, "Root Cause")
+	errorSnippet := extractSection(markdownReport, "Error Location")
+	suggestedFix := extractSection(markdownReport, "Suggested Fix")
+
+	result := &PipelineRCAResult{
+		JobID:          jobID,
+		JobName:        jobName,
+		RootCause:      rootCause,
+		ErrorSnippet:   errorSnippet,
+		SuggestedFix:   suggestedFix,
+		AnalysisFormat: markdownReport,
+	}
+
+	s.pipelineRCAMu.Lock()
+	s.pipelineRCAResults[cacheKey] = result
+	s.pipelineRCAMu.Unlock()
+
+	return result, nil
+}
+

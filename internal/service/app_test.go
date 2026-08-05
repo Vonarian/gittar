@@ -471,3 +471,41 @@ func TestAICostPresetDefaults(t *testing.T) {
 		t.Errorf("expected AICostPreset to be 'medium', got '%s'", confMedium.AICostPreset)
 	}
 }
+
+func TestStripAnsiCodes(t *testing.T) {
+	input := "\x1b[31mError:\x1b[0m build failed at line \x1b[1m42\x1b[0m"
+	expected := "Error: build failed at line 42"
+	got := stripAnsiCodes(input)
+	if got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestAnalyzePipelineFailure_Caching(t *testing.T) {
+	appService := NewAppService()
+
+	// Manually populate cache
+	cacheKey := "group/project1:1234"
+	mockResult := &PipelineRCAResult{
+		JobID:          1234,
+		JobName:        "test-job",
+		RootCause:      "Compilation failed due to missing symbol",
+		ErrorSnippet:   "main.go:42: undefined: Foo",
+		SuggestedFix:   "Define symbol Foo in main.go",
+		AnalysisFormat: "### 🎯 Root Cause\nCompilation failed due to missing symbol",
+	}
+
+	appService.pipelineRCAMu.Lock()
+	appService.pipelineRCAResults[cacheKey] = mockResult
+	appService.pipelineRCAMu.Unlock()
+
+	// Fetch without force should hit cache
+	res, err := appService.AnalyzePipelineFailure("group/project1", 1234, "test-job", false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if res.JobID != 1234 || res.RootCause != mockResult.RootCause {
+		t.Errorf("expected cached result %v, got %v", mockResult, res)
+	}
+}
+
